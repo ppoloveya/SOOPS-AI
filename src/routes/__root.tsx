@@ -1,6 +1,5 @@
 import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
-
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -8,50 +7,18 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Continuum — Build lasting habits" },
-      { name: "description", content: "A calm, focused habit tracker. Track streaks, visualize progress, and build your daily ritual." },
-      { name: "author", content: "Continuum" },
-      { property: "og:title", content: "Continuum — Build lasting habits" },
-      { property: "og:description", content: "A calm, focused habit tracker. Track streaks, visualize progress, and build your daily ritual." },
+      { title: "SOLVÉRA 7-Day Bloom Report" },
+      { name: "description", content: "솔베라 찔레꽃 리커버리 앰플과 함께하는 7일 셀프 피부 리포트. 하루 30초, 나만의 리커버리 기록." },
+      { property: "og:title", content: "SOLVÉRA 7-Day Bloom Report" },
+      { property: "og:description", content: "7일 동안 피부 상태와 생활을 기록하고, 나만의 리커버리 리포트를 확인하세요." },
       { property: "og:type", content: "website" },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/b9uXYmgdTyWTYhHfslbu4ZrHRZ73/social-images/social-1775640713838-continuum.webp" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/b9uXYmgdTyWTYhHfslbu4ZrHRZ73/social-images/social-1775640713838-continuum.webp" },
-      { name: "twitter:title", content: "Continuum — Build lasting habits" },
-      { name: "twitter:description", content: "A calm, focused habit tracker. Track streaks, visualize progress, and build your daily ritual." },
     ],
     links: [
-      {
-        rel: "preconnect",
-        href: "https://fonts.googleapis.com",
-      },
-      {
-        rel: "preconnect",
-        href: "https://fonts.gstatic.com",
-        crossOrigin: "anonymous",
-      },
-      {
-        rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap",
-      },
-      {
-        rel: "stylesheet",
-        href: appCss,
-      },
-    ],
-    scripts: [
-      {
-        children: `
-          (function() {
-            var theme = localStorage.getItem('continuum_theme') || 'light';
-            if (theme === 'system') {
-              theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            }
-            if (theme === 'dark') document.documentElement.classList.add('dark');
-          })();
-        `,
-      },
+      { rel: "preconnect", href: "https://cdn.jsdelivr.net", crossOrigin: "anonymous" },
+      { rel: "stylesheet", href: "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" },
+      { rel: "stylesheet", href: "https://cdn.jsdelivr.net/gh/wanteddev/maru-buri@1.2/dist/MaruBuri.css" },
+      { rel: "stylesheet", href: appCss },
     ],
   }),
   shellComponent: RootShell,
@@ -60,11 +27,9 @@ export const Route = createRootRoute({
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body className="pb-[env(safe-area-inset-bottom)]">
+    <html lang="ko">
+      <head><HeadContent /></head>
+      <body>
         {children}
         <Scripts />
       </body>
@@ -75,9 +40,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   return (
     <>
-      <div className="animate-page-enter">
-        <Outlet />
-      </div>
+      <Outlet />
       <Toaster position="top-center" />
     </>
   );
