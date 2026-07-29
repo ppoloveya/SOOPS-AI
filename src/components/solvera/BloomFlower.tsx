@@ -21,17 +21,17 @@ function Stem({ compact = false }: { compact?: boolean }) {
 
 // Yellow stamens (used in later days)
 function Stamens({ cx, cy, r, count = 26 }: { cx: number; cy: number; r: number; count?: number }) {
+  const rd = (n: number) => Number(n.toFixed(2));
   const dots = Array.from({ length: count }).map((_, i) => {
     const a = (i / count) * Math.PI * 2;
     const rr = r * (0.55 + ((i * 37) % 100) / 260);
-    const x = cx + Math.cos(a) * rr;
-    const y = cy + Math.sin(a) * rr;
+    const x = rd(cx + Math.cos(a) * rr);
+    const y = rd(cy + Math.sin(a) * rr);
     return <circle key={i} cx={x} cy={y} r={0.9} fill="#E8B84A" />;
   });
-  // central pistil cluster
   const inner = Array.from({ length: 8 }).map((_, i) => {
     const a = (i / 8) * Math.PI * 2;
-    return <circle key={`i${i}`} cx={cx + Math.cos(a) * 2.2} cy={cy + Math.sin(a) * 2.2} r={1.1} fill="#D4A02C" />;
+    return <circle key={`i${i}`} cx={rd(cx + Math.cos(a) * 2.2)} cy={rd(cy + Math.sin(a) * 2.2)} r={1.1} fill="#D4A02C" />;
   });
   return (
     <g>
