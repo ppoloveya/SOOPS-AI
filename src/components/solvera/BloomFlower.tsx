@@ -1,3 +1,4 @@
+import * as React from "react";
 /**
  * BloomFlower — 7 distinct SVG illustrations of a Korean wild rose (찔레꽃) opening across 7 days.
  * Each day has its own hand-authored path work. NO morphing / scaling one shape.
@@ -171,7 +172,7 @@ function Day7() {
   );
 }
 
-const RENDERERS: Record<number, () => JSX.Element> = {
+const RENDERERS: Record<number, () => React.ReactElement> = {
   1: Day1, 2: Day2, 3: Day3, 4: Day4, 5: Day5, 6: Day6, 7: Day7,
 };
 
