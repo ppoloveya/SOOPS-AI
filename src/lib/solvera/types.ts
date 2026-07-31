@@ -87,7 +87,12 @@ export interface DailyLog {
   exerciseType: ExerciseKey;
   exerciseMeta: ExerciseMeta;
   contextFactors: ContextKey[];
+  /** 자유 입력 "오늘 하루 한마디" — 감성 요약 전용, 상관관계 분석에는 사용하지 않음 */
+  note?: string;
+  /** 자유 입력에서 추출한 키워드 1개 — 감성 요약 전용 */
+  noteKeyword?: string;
 }
+
 
 export interface RecoverySession {
   version: number;

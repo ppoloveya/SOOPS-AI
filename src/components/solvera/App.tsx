@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BloomFlower } from "./BloomFlower";
 import { SleepDial } from "./SleepDial";
+import { ChatDailyFlow } from "./ChatDailyFlow";
 import {
   CONCERN_KEYS, CONCERN_LABEL, EMOTION_KEYS, EMOTION_LABEL, EMOTION_SCORE,
   EXERCISE_KEYS, EXERCISE_LABEL, EXERCISE_META, CONTEXT_KEYS, CONTEXT_LABEL,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/solvera/types";
 import { loadSession, saveSession, clearSession, todayISO } from "@/lib/solvera/storage";
 import { buildDemoSession } from "@/lib/solvera/demo";
+import { topKeyword } from "@/lib/solvera/keyword";
 import {
   concernResults, averageImprovement, ampouleUsageRate, completionRate,
   lifestyleFactors, recoveryType, nextWeekSuggestion, sleepMinutesFromTimes, sleepCategoryFrom,
@@ -19,7 +21,7 @@ const DEV_MODE = true;
 
 type Phase =
   | "landing" | "consent" | "profile" | "concerns" | "baseline" | "dashboard"
-  | "daily" | "day-complete" | "report";
+  | "daily" | "chat-daily" | "day-complete" | "report";
 
 export function SolveraApp() {
   const [phase, setPhase] = useState<Phase>("landing");
@@ -69,7 +71,8 @@ export function SolveraApp() {
       {phase === "profile" && session && <Profile session={session} setSession={setSession} onNext={() => setPhase("concerns")} onBack={() => setPhase("consent")} />}
       {phase === "concerns" && session && <ConcernsPick session={session} setSession={setSession} onNext={() => setPhase("baseline")} onBack={() => setPhase("profile")} />}
       {phase === "baseline" && session && <Baseline session={session} setSession={setSession} onNext={() => setPhase("dashboard")} onBack={() => setPhase("concerns")} />}
-      {phase === "dashboard" && session && <Dashboard session={session} setSession={setSession} onDaily={() => setPhase("daily")} onReport={() => setPhase("report")} onReset={resetAll} />}
+      {phase === "dashboard" && session && <Dashboard session={session} setSession={setSession} onDaily={() => setPhase("daily")} onChatDaily={() => setPhase("chat-daily")} onReport={() => setPhase("report")} onReset={resetAll} />}
+      {phase === "chat-daily" && session && <ChatDailyFlow session={session} setSession={setSession} onDone={() => setPhase("day-complete")} onCancel={() => setPhase("dashboard")} />}
       {phase === "daily" && session && <DailyFlow session={session} setSession={setSession} onDone={() => setPhase("day-complete")} onCancel={() => setPhase("dashboard")} />}
       {phase === "day-complete" && session && <DayComplete session={session} onContinue={() => setPhase("dashboard")} />}
       {phase === "report" && session && <Report session={session} demoMode={demoMode} onBack={() => demoMode ? setPhase("landing") : setPhase("dashboard")} onReset={resetAll} />}
@@ -379,7 +382,7 @@ function ScoreCard({ label, value, onChange }: { label: string; value: number | 
 /* =============================================================================
    DASHBOARD
 ============================================================================= */
-function Dashboard({ session, setSession, onDaily, onReport, onReset }: { session: RecoverySession; setSession: (s: RecoverySession) => void; onDaily: () => void; onReport: () => void; onReset: () => void }) {
+function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onReset }: { session: RecoverySession; setSession: (s: RecoverySession) => void; onDaily: () => void; onChatDaily: () => void; onReport: () => void; onReset: () => void }) {
   const done = session.dailyLogs.length;
   const day = Math.min(done + 1, 7);
   const canDaily = done < 7;
@@ -437,7 +440,12 @@ function Dashboard({ session, setSession, onDaily, onReport, onReset }: { sessio
         {canDaily && (
           todayLogged && !DEV_MODE
             ? <div className="text-center text-[13px] text-muted-foreground py-3">오늘 기록을 완료했어요. 내일 다시 만나요.</div>
-            : <PrimaryButton onClick={onDaily}>오늘 기록하기</PrimaryButton>
+            : (
+              <>
+                <PrimaryButton onClick={onChatDaily}>대화형으로 기록하기</PrimaryButton>
+                <PrimaryButton onClick={onDaily} variant="outline">기존 단계별로 기록하기</PrimaryButton>
+              </>
+            )
         )}
         {canReport && <PrimaryButton onClick={onReport} variant={canDaily ? "outline" : "primary"}>최종 리포트 보기</PrimaryButton>}
         {!canReport && DEV_MODE && (
@@ -891,6 +899,33 @@ function Report({ session, demoMode, onBack, onReset }: { session: RecoverySessi
               ))
           }
         </section>
+
+        {/* Emotional summary — 자유 입력 기반, 정형 데이터와 분리 */}
+        {session.dailyLogs.some(l => l.note || l.noteKeyword) && (
+          <section className="space-y-3">
+            <SectionTitle n="EMOTIONAL SUMMARY" title="감성 요약" />
+            <Card className="print-avoid-break">
+              <div className="text-[13px] text-charcoal/75 leading-[1.7]">
+                이번 주 가장 자주 등장한 키워드는{" "}
+                <b className="text-plum">#{topKeyword(session.dailyLogs.map(l => l.noteKeyword).filter(Boolean) as string[])}</b> 였어요.
+              </div>
+              <div className="mt-3 space-y-2">
+                {session.dailyLogs.filter(l => l.note).map(l => (
+                  <div key={l.day} className="rounded-xl border border-border bg-secondary/50 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] tracking-brand text-muted-foreground">DAY {l.day}</span>
+                      {l.noteKeyword && <span className="text-[11px] font-semibold text-rose bg-rose/15 px-2 py-0.5 rounded-full">#{l.noteKeyword}</span>}
+                    </div>
+                    <p className="text-[13px] text-charcoal/80 mt-1.5 leading-[1.6]">{l.note}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-3">
+                이 요약은 자유 입력 기록에서만 도출되며, 위의 상관관계 리포트(정형 태그)에는 반영되지 않습니다.
+              </p>
+            </Card>
+          </section>
+        )}
 
         {/* Recovery type */}
         <section className="space-y-3">
