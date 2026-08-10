@@ -115,18 +115,25 @@ function TopBar({ title, subtitle, onBack }: { title?: string; subtitle?: string
 }
 
 function PrimaryButton({ children, onClick, disabled, variant = "primary" }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; variant?: "primary" | "ghost" | "outline" }) {
-  const base = "w-full min-h-[52px] rounded-xl px-5 font-medium text-[15px] transition disabled:opacity-40 disabled:cursor-not-allowed";
+  const base = "w-full min-h-[52px] rounded-2xl px-5 font-medium text-[15px] transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100";
   const style = variant === "primary"
-    ? "bg-plum text-ivory shadow-[0_4px_14px_-4px_rgba(36,21,43,0.4)]"
+    ? "text-ivory shadow-[0_10px_28px_-8px_rgba(167,139,196,0.55)] hover:shadow-[0_12px_32px_-6px_rgba(231,166,184,0.5)]"
     : variant === "outline"
-      ? "bg-transparent border border-plum/25 text-plum"
-      : "bg-transparent text-plum/80";
-  return <button className={`${base} ${style}`} onClick={onClick} disabled={disabled}>{children}</button>;
+      ? "bg-white/40 backdrop-blur-sm border border-plum/20 text-plum hover:bg-white/60"
+      : "bg-transparent text-plum/80 hover:text-plum";
+  const primaryBg = variant === "primary"
+    ? { backgroundImage: "linear-gradient(135deg, var(--plum) 0%, #3B2247 55%, var(--lilac) 130%)" }
+    : undefined;
+  return (
+    <button className={`${base} ${style}`} style={primaryBg} onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  );
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-card rounded-2xl border border-border/70 shadow-[0_1px_0_rgba(0,0,0,0.02)] p-4 ${className}`}>
+    <div className={`bg-card/85 backdrop-blur-md rounded-2xl border border-white/50 shadow-[0_8px_24px_-12px_rgba(36,21,43,0.18)] p-4 ${className}`}>
       {children}
     </div>
   );
@@ -809,8 +816,11 @@ function Report({ session, demoMode, onBack, onReset }: { session: RecoverySessi
 
       <main className="px-5 pb-16 pt-2 space-y-5">
         {/* HERO */}
-        <div className="print-avoid-break bg-plum text-ivory rounded-3xl p-6 relative overflow-hidden">
-          <div className="absolute -right-6 -bottom-6 opacity-90">
+        <div
+          className="print-avoid-break text-ivory rounded-3xl p-6 relative overflow-hidden shadow-[0_20px_44px_-16px_rgba(36,21,43,0.5)]"
+          style={{ backgroundImage: "radial-gradient(120% 140% at 100% 0%, rgba(231,166,184,0.35), transparent 55%), radial-gradient(90% 110% at 0% 100%, rgba(167,139,196,0.35), transparent 55%), linear-gradient(150deg, var(--plum) 0%, var(--plum-deep) 100%)" }}
+        >
+          <div className="absolute -right-6 -bottom-6 opacity-95">
             <BloomFlower day={7} size={180} />
           </div>
           <div className="text-[10px] tracking-brand text-ivory/60 uppercase">RECOVERY REPORT · N°{session.id.slice(0,6).toUpperCase()}</div>
