@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { BloomFlower } from "./BloomFlower";
 import { SleepDial } from "./SleepDial";
 import { ChatDailyFlow } from "./ChatDailyFlow";
@@ -87,9 +87,9 @@ function Screen({ children, footer, header }: { children: React.ReactNode; foote
   return (
     <div className="min-h-full flex flex-col">
       {header}
-      <main className="flex-1 px-5 pb-40 pt-5">{children}</main>
+      <main className="flex-1 px-5 pb-8 pt-5">{children}</main>
       {footer && (
-        <div className="fixed bottom-0 left-0 right-0 md:absolute px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+16px)] bg-gradient-to-t from-ivory via-ivory to-ivory/90 no-print">
+        <div className="shrink-0 px-5 pt-3 pb-[calc(env(safe-area-inset-bottom)+16px)] bg-white/15 backdrop-blur-md no-print">
           <div className="mx-auto md:max-w-[360px]">{footer}</div>
         </div>
       )}
@@ -101,7 +101,7 @@ function TopBar({ title, subtitle, onBack }: { title?: string; subtitle?: string
   return (
     <header className="px-5 pt-[calc(env(safe-area-inset-top)+18px)] md:pt-6 pb-2 flex items-center gap-3">
       {onBack ? (
-        <button onClick={onBack} className="h-11 w-11 -ml-2 rounded-full flex items-center justify-center text-charcoal/70 hover:bg-black/5" aria-label="뒤로">
+        <button onClick={onBack} className="h-11 w-11 -ml-2 rounded-full flex items-center justify-center text-charcoal/70 hover:bg-white/40 glass-pill" aria-label="뒤로">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </button>
       ) : <div className="w-11" />}
@@ -115,17 +115,14 @@ function TopBar({ title, subtitle, onBack }: { title?: string; subtitle?: string
 }
 
 function PrimaryButton({ children, onClick, disabled, variant = "primary" }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; variant?: "primary" | "ghost" | "outline" }) {
-  const base = "w-full min-h-[52px] rounded-2xl px-5 font-medium text-[15px] transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100";
+  const base = "w-full min-h-[52px] rounded-full px-5 font-bold text-[13px] tracking-[0.08em] uppercase transition-all duration-200 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100";
   const style = variant === "primary"
-    ? "text-ivory shadow-[0_10px_28px_-8px_rgba(167,139,196,0.55)] hover:shadow-[0_12px_32px_-6px_rgba(231,166,184,0.5)]"
+    ? "glass-lucky hover:bg-white/45"
     : variant === "outline"
-      ? "bg-white/40 backdrop-blur-sm border border-plum/20 text-plum hover:bg-white/60"
-      : "bg-transparent text-plum/80 hover:text-plum";
-  const primaryBg = variant === "primary"
-    ? { backgroundImage: "linear-gradient(135deg, var(--plum) 0%, #3B2247 55%, var(--lilac) 130%)" }
-    : undefined;
+      ? "glass-lucky hover:bg-white/45"
+      : "bg-transparent text-plum/75 hover:text-plum";
   return (
-    <button className={`${base} ${style}`} style={primaryBg} onClick={onClick} disabled={disabled}>
+    <button className={`${base} ${style}`} onClick={onClick} disabled={disabled}>
       {children}
     </button>
   );
@@ -133,7 +130,7 @@ function PrimaryButton({ children, onClick, disabled, variant = "primary" }: { c
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-card/85 backdrop-blur-md rounded-2xl border border-white/50 shadow-[0_8px_24px_-12px_rgba(36,21,43,0.18)] p-4 ${className}`}>
+    <div className={`glass-surface rounded-[28px] p-4 ${className}`}>
       {children}
     </div>
   );
@@ -149,18 +146,15 @@ function FieldRecordLabel({ n }: { n: string }) {
 function Landing({ hasSession, onStart, onResume, onDemo }: { hasSession: boolean; onStart: () => void; onResume: () => void; onDemo: () => void }) {
   return (
     <Screen>
-      <div className="flex flex-col items-center text-center pt-8">
-        <div className="text-[11px] tracking-brand text-muted-foreground uppercase">RECOVERY RECORD · N°001</div>
-        <div className="mt-3 font-serif tracking-[0.3em] text-[22px] text-plum">SOLVÉRA</div>
-        <h1 className="mt-8 font-serif text-[28px] leading-[1.3] text-plum">
-          피부가 다시<br/>피어나는 7일
+      <div className="flex flex-col items-center text-center pt-7">
+        <div className="glass-pill px-4 py-2 text-[10px] tracking-brand text-plum/60 uppercase">RECOVERY RECORD · N°001</div>
+        <div className="mt-3 font-serif tracking-[0.3em] text-[22px] font-bold text-plum">SOOPSAI</div>
+        <h1 className="mt-8 font-serif text-[30px] leading-[1.25] text-plum drop-shadow-[0_1px_0_rgba(255,255,255,0.5)]">
+          나만의 7일<br/>피부 일기
         </h1>
-        <p className="mt-4 text-[14px] leading-[1.6] text-charcoal/70 max-w-[300px]">
-          피부 상태와 일상의 흔적을 기록하고<br/>나만의 리커버리 리포트를 확인하세요.
-        </p>
 
-        <div className="mt-8">
-          <BloomFlower day={7} size={180} />
+        <div className="mt-9 rounded-full bg-white/10 p-2 shadow-[0_24px_54px_-32px_rgba(44,26,83,0.42)]">
+          <BloomFlower day={7} size={220} />
         </div>
 
         <div className="w-full mt-6 space-y-3">
@@ -207,7 +201,7 @@ function Consent({ onBack, onNext }: { onBack: () => void; onNext: () => void })
         ))}
       </div>
 
-      <label className="mt-8 flex items-start gap-3 p-4 rounded-xl border border-border bg-card cursor-pointer">
+      <label className="glass-surface mt-8 flex items-start gap-3 rounded-2xl p-4 cursor-pointer">
         <input type="checkbox" checked={ok} onChange={e => setOk(e.target.checked)} className="mt-1 h-5 w-5 accent-plum" />
         <span className="text-[13px] leading-[1.5] text-charcoal/80">
           위 내용을 확인했으며, 셀프 기록 리포트 목적으로 데이터를 이 기기에 저장하는 것에 동의해요.
@@ -250,7 +244,7 @@ function Profile({ session, setSession, onNext, onBack }: { session: RecoverySes
           {[1,2,3,4,5].map(n => (
             <button key={n}
               onClick={() => setSession({ ...session, sensitivity: n })}
-              className={`flex-1 h-14 rounded-xl border text-[16px] tnum font-medium ${session.sensitivity === n ? "bg-plum text-ivory border-plum" : "bg-card border-border text-charcoal/70"}`}>
+              className={`flex-1 h-14 rounded-2xl border text-[16px] tnum font-medium transition ${session.sensitivity === n ? "bg-plum text-white border-plum shadow-[0_12px_24px_-18px_rgba(36,21,43,0.7)]" : "glass-pill text-charcoal/70"}`}>
               {n}
             </button>
           ))}
@@ -292,7 +286,7 @@ function Chip({ children, active, onClick, block }: { children: React.ReactNode;
     <button
       onClick={onClick}
       className={`${block ? "w-full" : ""} min-h-[48px] px-4 rounded-xl border text-[14px] font-medium transition ${
-        active ? "bg-plum text-ivory border-plum" : "bg-card border-border text-charcoal/75"
+        active ? "bg-plum text-white border-plum shadow-[0_12px_24px_-18px_rgba(36,21,43,0.7)]" : "glass-pill text-charcoal/75"
       }`}
     >{children}</button>
   );
@@ -327,7 +321,7 @@ function ConcernsPick({ session, setSession, onNext, onBack }: { session: Recove
         {CONCERN_KEYS.map(k => (
           <button key={k} onClick={() => toggle(k)}
             className={`relative min-h-[64px] p-3 rounded-xl border text-[14px] font-medium text-left transition ${
-              session.selectedConcerns.includes(k) ? "bg-rose/15 border-rose text-plum" : "bg-card border-border text-charcoal/75"
+              session.selectedConcerns.includes(k) ? "bg-rose/25 border-rose text-plum shadow-[0_12px_24px_-20px_rgba(231,166,184,0.85)]" : "glass-pill text-charcoal/75"
             }`}>
             {CONCERN_LABEL[k]}
             {session.selectedConcerns.includes(k) && (
@@ -349,11 +343,19 @@ function ConcernsPick({ session, setSession, onNext, onBack }: { session: Recove
 function Baseline({ session, setSession, onNext, onBack }: { session: RecoverySession; setSession: (s: RecoverySession) => void; onNext: () => void; onBack: () => void }) {
   const scores = session.baselineScores;
   const setScore = (k: ConcernKey, v: number) => setSession({ ...session, baselineScores: { ...scores, [k]: v } });
-  const ready = session.selectedConcerns.every(k => typeof scores[k] === "number");
+  const ready = session.selectedConcerns.length > 0;
+  const finishBaseline = () => {
+    const filledScores = { ...scores };
+    session.selectedConcerns.forEach(k => {
+      if (typeof filledScores[k] !== "number") filledScores[k] = 5;
+    });
+    setSession({ ...session, baselineScores: filledScores });
+    onNext();
+  };
   return (
     <Screen
       header={<TopBar subtitle="STEP 04" title="시작 점수" onBack={onBack} />}
-      footer={<PrimaryButton onClick={onNext} disabled={!ready}>기록 시작하기</PrimaryButton>}
+      footer={<PrimaryButton onClick={finishBaseline} disabled={!ready}>기록 시작하기</PrimaryButton>}
     >
       <FieldRecordLabel n="BASELINE" />
       <h2 className="font-serif text-[22px] text-plum mt-2 mb-2">지금의 불편 정도를 알려주세요</h2>
@@ -361,7 +363,7 @@ function Baseline({ session, setSession, onNext, onBack }: { session: RecoverySe
 
       <div className="space-y-4">
         {session.selectedConcerns.map(k => (
-          <ScoreCard key={k} label={CONCERN_LABEL[k]} value={scores[k] ?? null} onChange={v => setScore(k, v)} />
+          <MoodScoreCard key={k} label={CONCERN_LABEL[k]} value={scores[k] ?? null} onChange={v => setScore(k, v)} />
         ))}
       </div>
     </Screen>
@@ -378,12 +380,98 @@ function ScoreCard({ label, value, onChange }: { label: string; value: number | 
       </div>
       <input type="range" min={0} max={10} step={1} value={v}
         onChange={e => onChange(Number(e.target.value))}
-        className="brand-slider mt-2" />
+          className="brand-slider mt-2" />
       <div className="flex justify-between text-[10px] text-muted-foreground px-0.5 mt-0.5">
         <span>0</span><span>5</span><span>10</span>
       </div>
     </Card>
   );
+}
+
+function MoodScoreCard({ label, value, onChange }: { label: string; value: number | null; onChange: (v: number) => void }) {
+  const v = value ?? 5;
+  const mood = discomfortMood(v);
+  return (
+    <div
+      className="glass-surface rounded-[28px] p-4 transition-colors duration-300"
+      style={{ borderColor: mood.border, background: mood.background }}
+    >
+      <div className="flex items-baseline justify-between">
+        <div>
+          <div className="text-[14px] font-medium text-plum">{label}</div>
+          <div
+            className="mt-1 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
+            style={{ color: mood.color, background: mood.badge }}
+          >
+            {mood.label}
+          </div>
+        </div>
+        <div className="tnum text-[28px] font-bold" style={{ color: mood.color }}>
+          {v}<span className="text-[13px] text-muted-foreground font-normal">/10</span>
+        </div>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={10}
+        step={1}
+        value={v}
+        onChange={e => onChange(Number(e.target.value))}
+        className="brand-slider mt-3"
+        style={{
+          "--slider-accent": mood.color,
+          "--slider-soft": mood.soft,
+          "--slider-progress": `${v * 10}%`,
+        } as CSSProperties}
+      />
+      <div className="flex justify-between text-[10px] text-muted-foreground px-0.5 mt-0.5">
+        <span>0</span><span>5</span><span>10</span>
+      </div>
+    </div>
+  );
+}
+
+function discomfortMood(v: number) {
+  if (v <= 1) return {
+    label: "거의 불편 없음",
+    color: "#5F9F7A",
+    soft: "rgba(95,159,122,0.28)",
+    badge: "rgba(95,159,122,0.14)",
+    border: "rgba(255,255,255,0.86)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.08)), rgba(220,248,233,0.36)",
+  };
+  if (v <= 3) return {
+    label: "살짝 신경 쓰임",
+    color: "#7FA765",
+    soft: "rgba(127,167,101,0.3)",
+    badge: "rgba(127,167,101,0.15)",
+    border: "rgba(255,255,255,0.86)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.08)), rgba(232,246,206,0.38)",
+  };
+  if (v <= 5) return {
+    label: "보통 정도",
+    color: "#A08A4D",
+    soft: "rgba(160,138,77,0.28)",
+    badge: "rgba(160,138,77,0.15)",
+    border: "rgba(255,255,255,0.88)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.08)), rgba(249,232,181,0.34)",
+  };
+  if (v <= 7) return {
+    label: "꽤 불편함",
+    color: "#C1787B",
+    soft: "rgba(193,120,123,0.3)",
+    badge: "rgba(193,120,123,0.15)",
+    border: "rgba(255,255,255,0.9)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.08)), rgba(250,210,216,0.34)",
+  };
+  return {
+    label: "많이 불편함",
+    color: "#B45B74",
+    soft: "rgba(180,91,116,0.32)",
+    badge: "rgba(180,91,116,0.16)",
+    border: "rgba(255,255,255,0.94)",
+    background: "linear-gradient(180deg, rgba(255,255,255,0.3), rgba(255,255,255,0.08)), rgba(242,188,213,0.36)",
+  };
 }
 
 /* =============================================================================
@@ -413,15 +501,15 @@ function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onRese
           <div className="font-serif text-[26px] text-plum leading-tight">DAY {day}</div>
           <div className="text-[13px] text-muted-foreground mt-1">개화까지 {Math.max(0, 7 - done)}일 남았어요</div>
         </div>
-        <BloomFlower day={day} size={120} />
+        <BloomFlower day={day} size={138} />
       </div>
 
       <Card className="mt-6">
         <div className="flex justify-between text-[11px] text-muted-foreground mb-2">
           <span>진행률</span><span className="tnum">{done}/7</span>
         </div>
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
-          <div className="h-full bg-rose transition-all" style={{ width: `${(done/7)*100}%` }} />
+        <div className="h-2 rounded-full bg-white/45 overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+          <div className="h-full transition-all" style={{ width: `${(done/7)*100}%`, background: "linear-gradient(90deg, var(--rose), var(--lilac), var(--sky))" }} />
         </div>
         <div className="grid grid-cols-7 gap-1.5 mt-4">
           {Array.from({length: 7}).map((_, i) => {
@@ -430,10 +518,10 @@ function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onRese
             const isDone = !!log;
             const isCurrent = n === day && !isDone;
             return (
-              <div key={n} className={`aspect-square rounded-lg flex flex-col items-center justify-center border ${
-                isDone ? "bg-plum text-ivory border-plum" :
-                isCurrent ? "bg-rose/20 border-rose text-plum" :
-                "bg-card border-border text-charcoal/40"
+              <div key={n} className={`aspect-square rounded-[20px] flex flex-col items-center justify-center border-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-sm ${
+                isDone ? "bg-white/45 text-plum border-white" :
+                isCurrent ? "bg-white/35 border-white text-plum" :
+                "bg-white/20 border-white/60 text-charcoal/40"
               }`}>
                 <div className="text-[10px] tracking-brand">DAY</div>
                 <div className="tnum text-[14px] font-bold">{n}</div>
@@ -467,7 +555,7 @@ function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onRese
           <div className="text-[11px] tracking-brand text-muted-foreground uppercase mb-2">기록된 날짜</div>
           <div className="space-y-1.5">
             {session.dailyLogs.map(l => (
-              <div key={l.day} className="flex justify-between text-[13px] py-2 px-3 rounded-lg bg-card border border-border">
+              <div key={l.day} className="glass-pill flex justify-between text-[13px] py-2 px-3 rounded-full">
                 <span className="text-plum">DAY {l.day}</span>
                 <span className="tnum text-muted-foreground">{l.date}</span>
               </div>
@@ -558,7 +646,7 @@ function DailyFlow({ session, setSession, onDone, onCancel }: { session: Recover
           <h2 className="font-serif text-[22px] text-plum mt-2 mb-6">오늘 피부는 어떤가요?</h2>
           <div className="space-y-4">
             {session.selectedConcerns.map(k => (
-              <ScoreCard key={k} label={CONCERN_LABEL[k]} value={concernScores[k] ?? null}
+              <MoodScoreCard key={k} label={CONCERN_LABEL[k]} value={concernScores[k] ?? null}
                 onChange={v => setConcernScores({ ...concernScores, [k]: v })} />
             ))}
           </div>
@@ -778,7 +866,7 @@ function DayComplete({ session, onContinue }: { session: RecoverySession; onCont
       footer={<PrimaryButton onClick={onContinue}>{session.completed ? "리포트 확인하기" : "진행 현황으로"}</PrimaryButton>}
     >
       <div className="pt-8 text-center">
-        <BloomFlower day={day} size={180} />
+        <BloomFlower day={day} size={148} />
         <div className="text-[11px] tracking-brand text-muted-foreground uppercase mt-4">DAY {day} · COMPLETE</div>
         <h2 className="font-serif text-[26px] text-plum mt-2">오늘 기록 완료</h2>
         <p className="text-[13px] text-muted-foreground mt-1">지금까지 {done}일을 기록했어요.</p>
@@ -817,25 +905,26 @@ function Report({ session, demoMode, onBack, onReset }: { session: RecoverySessi
       <main className="px-5 pb-16 pt-2 space-y-5">
         {/* HERO */}
         <div
-          className="print-avoid-break text-ivory rounded-3xl p-6 relative overflow-hidden shadow-[0_20px_44px_-16px_rgba(36,21,43,0.5)]"
-          style={{ backgroundImage: "radial-gradient(120% 140% at 100% 0%, rgba(231,166,184,0.35), transparent 55%), radial-gradient(90% 110% at 0% 100%, rgba(167,139,196,0.35), transparent 55%), linear-gradient(150deg, var(--plum) 0%, var(--plum-deep) 100%)" }}
+          className="print-avoid-break text-white rounded-3xl p-6 relative overflow-hidden shadow-[0_20px_44px_-16px_rgba(36,21,43,0.5)]"
+          style={{ backgroundImage: "linear-gradient(138deg, rgba(36,21,43,0.94) 0%, rgba(81,48,96,0.9) 46%, rgba(158,183,232,0.74) 135%)" }}
         >
+          <div aria-hidden className="absolute inset-0 opacity-60" style={{ background: "linear-gradient(118deg, transparent 4%, rgba(231,166,184,0.42) 36%, transparent 58%), linear-gradient(72deg, rgba(158,183,232,0.34), transparent 42%)", filter: "blur(10px)" }} />
           <div className="absolute -right-6 -bottom-6 opacity-95">
             <BloomFlower day={7} size={180} />
           </div>
-          <div className="text-[10px] tracking-brand text-ivory/60 uppercase">RECOVERY REPORT · N°{session.id.slice(0,6).toUpperCase()}</div>
-          <div className="font-serif tracking-[0.3em] text-[16px] text-ivory/85 mt-1">SOLVÉRA</div>
-          <div className="mt-6">
-            <div className="text-[11px] tracking-brand text-ivory/60 uppercase">평균 개선</div>
-            <div className="tnum font-bold leading-none text-ivory mt-2" style={{ fontSize: 56 }}>
+          <div className="relative z-10 text-[10px] tracking-brand text-white/60 uppercase">RECOVERY REPORT · N°{session.id.slice(0,6).toUpperCase()}</div>
+          <div className="relative z-10 font-serif tracking-[0.3em] text-[16px] text-white/85 mt-1">SOOPSAI</div>
+          <div className="relative z-10 mt-6">
+            <div className="text-[11px] tracking-brand text-white/60 uppercase">평균 개선</div>
+            <div className="tnum font-bold leading-none text-white mt-2" style={{ fontSize: 56 }}>
               {avg !== null ? `${avg}%` : "–"}
             </div>
-            <p className="mt-4 font-serif text-[17px] leading-[1.5] text-ivory/95 max-w-[220px]">
+            <p className="mt-4 font-serif text-[17px] leading-[1.5] text-white/95 max-w-[220px]">
               {avg !== null
-                ? `SOLVÉRA 리커버리 앰플과 함께한 7일 동안 주요 피부 고민이 평균 ${avg}% 개선되었어요.`
+                ? `SOOPSAI 리커버리 앰플과 함께한 7일 동안 주요 피부 고민이 평균 ${avg}% 개선되었어요.`
                 : "7일 동안의 기록이 완료됐어요."}
             </p>
-            <p className="text-[10px] text-ivory/50 mt-2">사용자가 직접 기록한 점수 기준</p>
+            <p className="text-[10px] text-white/50 mt-2">사용자가 직접 기록한 점수 기준</p>
           </div>
         </div>
 

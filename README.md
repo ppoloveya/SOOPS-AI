@@ -1,4 +1,4 @@
-# SOLVERA
+# SOOPSAI
 
 ## Project Overview
 
@@ -192,7 +192,7 @@ DailyMint is a mobile-first habit tracker application that enables users to buil
 
 This project was built with [Lovable](https://lovable.dev).
 
-**Live app**: https://solvera123.lovable.app
+**Live app**: https://soopsai.vercel.app
 
 ## Build with Lovable
 

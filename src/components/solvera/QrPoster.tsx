@@ -23,7 +23,7 @@ export function QrPoster() {
 
   return (
     <div className="min-h-full bg-ivory px-6 py-12 flex flex-col items-center text-center">
-      <p className="tracking-brand text-[11px] uppercase text-muted-foreground">Solvéra</p>
+      <p className="tracking-brand text-[11px] uppercase text-muted-foreground">SOOPSAI</p>
       <h1 className="font-serif text-2xl text-plum mt-3">7-Day Bloom Report</h1>
       <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
         카메라로 QR을 스캔하면
@@ -33,7 +33,7 @@ export function QrPoster() {
 
       <div className="print-avoid-break mt-8 rounded-3xl border border-border bg-card p-5 shadow-[0_16px_40px_-24px_rgba(36,21,43,0.5)]">
         {dataUrl ? (
-          <img src={dataUrl} alt="SOLVÉRA 7-Day Bloom Report 접속 QR 코드" className="h-56 w-56" />
+          <img src={dataUrl} alt="SOOPSAI 7-Day Bloom Report 접속 QR 코드" className="h-56 w-56" />
         ) : (
           <div className="h-56 w-56 animate-pulse rounded-xl bg-muted" />
         )}
@@ -50,7 +50,7 @@ export function QrPoster() {
         </button>
         <a
           href={dataUrl || "#"}
-          download="solvera-qr.png"
+          download="soopsai-qr.png"
           className="rounded-full border border-border px-6 py-3 text-sm text-plum"
         >
           QR 이미지 저장

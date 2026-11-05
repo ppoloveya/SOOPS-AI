@@ -6,6 +6,7 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { componentTagger } from "lovable-tagger";
+import { nitro } from "nitro/vite";
 
 function devClientErrorLogger() {
   const VIRTUAL_ID = "virtual:dev-client-error-handler";
@@ -161,7 +162,8 @@ function devServerFnErrorLogger() {
 }
 
 export default defineConfig(({ command, mode }) => {
-  const useCloudflare = command === "build";
+  const useVercel = process.env.VERCEL === "1";
+  const useCloudflare = command === "build" && !useVercel;
 
   // Load VITE_ env vars and define them for SSR
   const env = loadEnv(mode, process.cwd(), "VITE_");
@@ -191,6 +193,7 @@ export default defineConfig(({ command, mode }) => {
       devServerFnErrorLogger(),
       ...(useCloudflare ? [cloudflare({ viteEnvironment: { name: "ssr" } })] : []),
       tanstackStart(),
+      ...(useVercel ? [nitro()] : []),
       viteReact(),
       mode === "development" && componentTagger(),
     ].filter(Boolean),

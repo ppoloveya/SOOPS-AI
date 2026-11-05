@@ -1,249 +1,44 @@
-import * as React from "react";
-/**
- * BloomFlower — 7 distinct SVG illustrations of a Korean wild rose (찔레꽃) opening across 7 days.
- * Each day has its own hand-authored path work. NO morphing / scaling one shape.
- *
- * Visual language: soft gradient petals + a diffused, blurred "pigment mist" glow behind the
- * bloom (rose / lilac / gold), echoing a painterly, film-grain floral aesthetic rather than
- * flat vector fills.
- */
-type Props = { day: number; size?: number; className?: string };
+import type { CSSProperties } from "react";
 
-// Shared gradient / glow / blur defs, reused by every day's illustration
-function BloomDefs() {
+type Props = { day: number; size?: number; className?: string; animated?: boolean };
+
+export function BloomFlower({ day, size = 160, className = "", animated = true }: Props) {
+  const roundedDay = Math.round(day);
+  const progress = Math.min(1, Math.max(0, roundedDay / 7));
+  const reveal = 14 + progress * 86;
+  const height = size < 90 ? size : size * 1.34;
+  const isSprout = roundedDay <= 2;
+
   return (
-    <defs>
-      <radialGradient id="bloom-petal" cx="32%" cy="26%" r="80%">
-        <stop offset="0%" stopColor="#FCE3E9" />
-        <stop offset="45%" stopColor="#F4C6D3" />
-        <stop offset="100%" stopColor="#D68DA0" />
-      </radialGradient>
-      <radialGradient id="bloom-petal-soft" cx="30%" cy="24%" r="85%">
-        <stop offset="0%" stopColor="#F6D9CC" />
-        <stop offset="55%" stopColor="#E7A6B8" />
-        <stop offset="100%" stopColor="#B2718A" />
-      </radialGradient>
-      <radialGradient id="bloom-bud" cx="35%" cy="22%" r="80%">
-        <stop offset="0%" stopColor="#D9CFC0" />
-        <stop offset="60%" stopColor="#B8C3AC" />
-        <stop offset="100%" stopColor="#8FA085" />
-      </radialGradient>
-      <radialGradient id="bloom-center" cx="40%" cy="35%" r="70%">
-        <stop offset="0%" stopColor="#FCF3D6" />
-        <stop offset="70%" stopColor="#F5E6BB" />
-        <stop offset="100%" stopColor="#E8CE8C" />
-      </radialGradient>
-      <radialGradient id="bloom-glow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stopColor="#E7A6B8" stopOpacity="0.55" />
-        <stop offset="35%" stopColor="#E8B84A" stopOpacity="0.28" />
-        <stop offset="68%" stopColor="#A78BC4" stopOpacity="0.22" />
-        <stop offset="100%" stopColor="#A78BC4" stopOpacity="0" />
-      </radialGradient>
-      <filter id="bloom-blur" x="-60%" y="-60%" width="220%" height="220%">
-        <feGaussianBlur stdDeviation="9" />
-      </filter>
-      <filter id="bloom-blur-soft" x="-60%" y="-60%" width="220%" height="220%">
-        <feGaussianBlur stdDeviation="4" />
-      </filter>
-    </defs>
-  );
-}
-
-// Diffused mist halo behind the bloom — grows richer as the flower opens
-function Glow({ day, cx = 100, cy = 92 }: { day: number; cx?: number; cy?: number }) {
-  const scale = 0.55 + day * 0.09;
-  const r = 46 * scale;
-  const opacity = 0.35 + day * 0.075;
-  return (
-    <circle cx={cx} cy={cy} r={r} fill="url(#bloom-glow)" filter="url(#bloom-blur)" opacity={Math.min(1, opacity)} />
-  );
-}
-
-// Common stem + leaves used across days (subtle underlay)
-function Stem({ compact = false }: { compact?: boolean }) {
-  if (compact) return null;
-  return (
-    <g stroke="#71876B" strokeWidth={1.4} fill="none" strokeLinecap="round">
-      <path d="M100 175 C 102 155 98 135 100 118" />
-      <path d="M100 158 C 92 152 86 148 78 149" />
-      <path d="M78 149 C 74 145 74 140 78 137 C 84 137 90 142 92 148" fill="#8FA085" opacity="0.55" stroke="none" />
-      <path d="M100 145 C 108 140 116 138 122 141" />
-      <path d="M122 141 C 128 140 130 136 128 132 C 122 130 114 132 110 138" fill="#8FA085" opacity="0.55" stroke="none" />
-    </g>
-  );
-}
-
-// Yellow stamens (used in later days)
-function Stamens({ cx, cy, r, count = 26 }: { cx: number; cy: number; r: number; count?: number }) {
-  const rd = (n: number) => Number(n.toFixed(2));
-  const dots = Array.from({ length: count }).map((_, i) => {
-    const a = (i / count) * Math.PI * 2;
-    const rr = r * (0.55 + ((i * 37) % 100) / 260);
-    const x = rd(cx + Math.cos(a) * rr);
-    const y = rd(cy + Math.sin(a) * rr);
-    return <circle key={i} cx={x} cy={y} r={0.9} fill="#E8B84A" />;
-  });
-  const inner = Array.from({ length: 8 }).map((_, i) => {
-    const a = (i / 8) * Math.PI * 2;
-    return <circle key={`i${i}`} cx={rd(cx + Math.cos(a) * 2.2)} cy={rd(cy + Math.sin(a) * 2.2)} r={1.1} fill="#D4A02C" />;
-  });
-  return (
-    <g>
-      {dots}
-      {inner}
-      <circle cx={cx} cy={cy} r={1.4} fill="#B47F1E" />
-    </g>
-  );
-}
-
-function Petal({ d, fill = "url(#bloom-petal)", opacity = 1 }: { d: string; fill?: string; opacity?: number }) {
-  return <path d={d} fill={fill} stroke="#D68DA0" strokeOpacity={0.45} strokeWidth={0.6} opacity={opacity} />;
-}
-
-function Day1() {
-  return (
-    <>
-      <Glow day={1} />
-      <Stem />
-      {/* tight closed bud */}
-      <g>
-        <ellipse cx={100} cy={95} rx={12} ry={20} fill="url(#bloom-bud)" />
-        <ellipse cx={100} cy={92} rx={9} ry={17} fill="url(#bloom-petal-soft)" />
-        <path d="M92 95 C 96 78 104 78 108 95 C 106 100 94 100 92 95Z" fill="#E7A6B8" opacity={0.5} />
-        <path d="M100 78 C 97 72 103 72 100 78" stroke="#71876B" strokeWidth={1} fill="none" />
-      </g>
-    </>
-  );
-}
-
-function Day2() {
-  return (
-    <>
-      <Glow day={2} />
-      <Stem />
-      <g>
-        <ellipse cx={100} cy={94} rx={16} ry={22} fill="url(#bloom-bud)" />
-        <ellipse cx={100} cy={90} rx={12} ry={19} fill="url(#bloom-petal-soft)" />
-        <path d="M88 92 C 92 72 108 72 112 92 C 108 100 92 100 88 92Z" fill="url(#bloom-petal)" />
-        <path d="M100 74 C 96 68 104 68 100 74" stroke="#71876B" strokeWidth={1} fill="none" />
-        <path d="M96 82 C 100 78 104 82 100 88" stroke="#D68DA0" strokeWidth={0.6} fill="none" opacity={0.5} />
-      </g>
-    </>
-  );
-}
-
-function Day3() {
-  return (
-    <>
-      <Glow day={3} />
-      <Stem />
-      <g transform="translate(100 96)">
-        <Petal d="M -22 -6 C -30 -22 -14 -34 -4 -22 C -6 -12 -14 -4 -22 -6 Z" />
-        <Petal d="M 22 -6 C 30 -22 14 -34 4 -22 C 6 -12 14 -4 22 -6 Z" />
-        <ellipse cx={0} cy={-4} rx={12} ry={18} fill="url(#bloom-petal)" />
-        <ellipse cx={0} cy={-6} rx={8} ry={12} fill="#FCE3E9" opacity={0.85} />
-        <circle cx={0} cy={-4} r={3} fill="url(#bloom-center)" opacity={0.7} />
-      </g>
-    </>
-  );
-}
-
-function Day4() {
-  return (
-    <>
-      <Glow day={4} />
-      <Stem />
-      <g transform="translate(100 96)">
-        <Petal d="M -28 -6 C -38 -26 -14 -38 -4 -22 C -8 -14 -18 -4 -28 -6 Z" />
-        <Petal d="M 28 -6 C 38 -26 14 -38 4 -22 C 8 -14 18 -4 28 -6 Z" />
-        <Petal d="M -18 12 C -30 8 -32 -8 -18 -14 C -10 -8 -10 4 -18 12 Z" opacity={0.9} />
-        <Petal d="M 18 12 C 30 8 32 -8 18 -14 C 10 -8 10 4 18 12 Z" opacity={0.9} />
-        <ellipse cx={0} cy={-4} rx={10} ry={14} fill="#FCE3E9" opacity={0.9} />
-        <Stamens cx={0} cy={-4} r={7} count={12} />
-      </g>
-    </>
-  );
-}
-
-function Day5() {
-  // ~70% open — 5 petals visible, centre yellow
-  return (
-    <>
-      <Glow day={5} />
-      <Stem />
-      <g transform="translate(100 96)">
-        {[0, 72, 144, 216, 288].map((deg, i) => (
-          <g key={i} transform={`rotate(${deg - 90})`}>
-            <Petal d="M -14 0 C -20 -22 -6 -34 0 -28 C 6 -34 20 -22 14 0 C 8 8 -8 8 -14 0 Z" />
-          </g>
-        ))}
-        <circle cx={0} cy={0} r={9} fill="url(#bloom-center)" />
-        <Stamens cx={0} cy={0} r={9} count={20} />
-      </g>
-    </>
-  );
-}
-
-function Day6() {
-  return (
-    <>
-      <Glow day={6} />
-      <Stem />
-      <g transform="translate(100 96)">
-        {[0, 72, 144, 216, 288].map((deg, i) => (
-          <g key={i} transform={`rotate(${deg - 90})`}>
-            <Petal d="M -18 2 C -26 -26 -8 -40 0 -34 C 8 -40 26 -26 18 2 C 10 12 -10 12 -18 2 Z" />
-          </g>
-        ))}
-        <circle cx={0} cy={0} r={11} fill="url(#bloom-center)" />
-        <Stamens cx={0} cy={0} r={11} count={26} />
-      </g>
-    </>
-  );
-}
-
-function Day7() {
-  // Fully open, front-facing wild rose. 5 broad thin pink petals, rich yellow stamens.
-  return (
-    <>
-      <Glow day={7} />
-      <Stem />
-      <g transform="translate(100 96)">
-        {[0, 72, 144, 216, 288].map((deg, i) => (
-          <g key={i} transform={`rotate(${deg - 90})`}>
-            {/* petal back (gradient, softly diffused edge) */}
-            <path
-              d="M -24 4 C -34 -28 -10 -46 0 -40 C 10 -46 34 -28 24 4 C 14 16 -14 16 -24 4 Z"
-              fill="url(#bloom-petal)" stroke="#D68DA0" strokeOpacity={0.4} strokeWidth={0.6}
-            />
-            {/* subtle vein */}
-            <path d="M 0 -38 C 2 -22 2 -8 0 4" stroke="#D68DA0" strokeWidth={0.5} opacity={0.4} fill="none" />
-            {/* highlight */}
-            <path
-              d="M -18 -2 C -22 -22 -6 -34 0 -32 C 6 -34 22 -22 18 -2 C 12 8 -12 8 -18 -2 Z"
-              fill="#FCE3E9" opacity={0.65}
-            />
-          </g>
-        ))}
-        {/* Yellow stamen cushion */}
-        <circle cx={0} cy={0} r={13} fill="url(#bloom-center)" />
-        <Stamens cx={0} cy={0} r={13} count={36} />
-      </g>
-    </>
-  );
-}
-
-const RENDERERS: Record<number, () => React.ReactElement> = {
-  1: Day1, 2: Day2, 3: Day3, 4: Day4, 5: Day5, 6: Day6, 7: Day7,
-};
-
-export function BloomFlower({ day, size = 160, className = "" }: Props) {
-  const d = Math.min(7, Math.max(1, Math.round(day)));
-  const R = RENDERERS[d];
-  return (
-    <svg viewBox="0 0 200 200" width={size} height={size} className={className} aria-label={`Day ${d} bloom`}>
-      <BloomDefs />
-      <R />
-    </svg>
+    <div
+      className={`flower-specimen ${isSprout ? "flower-specimen-sprout-only" : ""} ${animated ? "flower-specimen-grow" : ""} ${className}`}
+      style={
+        {
+          width: size,
+          height,
+          "--flower-reveal": `${100 - reveal}%`,
+          "--flower-target-reveal": `${100 - reveal}%`,
+        } as CSSProperties
+      }
+      aria-label={`Day ${roundedDay} growing flower`}
+    >
+      {isSprout ? (
+        <svg className="flower-sprout flower-sprout-standing" viewBox="0 0 120 120" aria-hidden="true">
+          <path className="flower-sprout-stem" d="M60 104 L60 39" />
+          <path className="flower-sprout-leaf flower-sprout-leaf-left" d="M57 70 C38 54 20 57 13 78 C35 83 50 79 57 70 Z" />
+          <path className="flower-sprout-leaf flower-sprout-leaf-right" d="M63 62 C84 44 104 48 111 70 C89 78 72 73 63 62 Z" />
+        </svg>
+      ) : (
+        <>
+          <div className="flower-specimen-shadow" />
+          <img
+            src="/solvera-botanical-flower-cutout.png"
+            alt=""
+            className="flower-specimen-image"
+            draggable={false}
+          />
+        </>
+      )}
+    </div>
   );
 }
