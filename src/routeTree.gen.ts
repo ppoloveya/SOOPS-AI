@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PlantRouteImport } from './routes/plant'
 import { Route as QrRouteImport } from './routes/qr'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlantRoute = PlantRouteImport.update({
+  id: '/plant',
+  path: '/plant',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QrRoute = QrRouteImport.update({
@@ -25,27 +31,31 @@ const QrRoute = QrRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/plant': typeof PlantRoute
   '/qr': typeof QrRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/plant': typeof PlantRoute
   '/qr': typeof QrRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/plant': typeof PlantRoute
   '/qr': typeof QrRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/qr'
+  fullPaths: '/' | '/plant' | '/qr'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/qr'
-  id: '__root__' | '/' | '/qr'
+  to: '/' | '/plant' | '/qr'
+  id: '__root__' | '/' | '/plant' | '/qr'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PlantRoute: typeof PlantRoute
   QrRoute: typeof QrRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/plant': {
+      id: '/plant'
+      path: '/plant'
+      fullPath: '/plant'
+      preLoaderRoute: typeof PlantRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/qr': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PlantRoute: PlantRoute,
   QrRoute: QrRoute,
 }
 export const routeTree = rootRouteImport

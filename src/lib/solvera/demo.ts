@@ -42,6 +42,7 @@ export function buildDemoSession(): RecoverySession {
     version: 1,
     id: "demo",
     startedAt: start.toISOString(),
+    plantName: "나의 찔레꽃",
     skinType: "combo",
     sensitivity: 3,
     currentCondition: "same",
@@ -49,6 +50,8 @@ export function buildDemoSession(): RecoverySession {
     selectedConcerns: ["redness", "trouble", "pores"],
     baselineScores: { redness: 6, trouble: 8, pores: 8 },
     dailyLogs: logs,
+    wateredDates: [],
+    fertilizedDates: [],
     completed: true,
   };
 }

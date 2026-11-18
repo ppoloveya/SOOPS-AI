@@ -6,6 +6,7 @@ import {
   type RecoverySession, type SleepCategory,
 } from "@/lib/solvera/types";
 import { todayISO } from "@/lib/solvera/storage";
+import { currentStreak, hasCompletedChallenge } from "@/lib/solvera/streak";
 import { analyzeNote } from "@/lib/solvera/keyword";
 
 type Msg = { id: number; role: "bot" | "user"; text: string; subtle?: boolean };
@@ -227,7 +228,7 @@ function parseLife(text: string, showMenstrual: boolean): LifeDraft {
   else if (includesAny(t, ["거의못", "못잤", "잠못"])) sleep = "under5";
   else if (includesAny(t, ["부족", "조금잤", "설쳤"])) sleep = "fiveToSix";
 
-  const ampoule = includesAny(t, ["앰플", "발랐", "사용", "썼"]) && !includesAny(t, ["안썼", "못썼", "안발랐", "미사용"]);
+  const ampoule = includesAny(t, ["숲사이", "앰플"]) && !includesAny(t, ["안썼", "못썼", "안발랐", "미사용", "사용안했", "사용하지않", "안썼어요"]);
 
   return {
     emotions: emotions.length ? emotions : ["normal"],
@@ -252,14 +253,14 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const day = Math.min(session.dailyLogs.length + 1, 7);
+  const day = Math.min(currentStreak(session.dailyLogs, todayISO()) + 1, 7);
   const [phase, setPhase] = useState<"life" | "concern" | "note" | "saving" | "done">("life");
   const [msgs, setMsgs] = useState<Msg[]>(() => [
     { id: 1, role: "bot", text: `오늘의 작은 변화를 같이 남겨볼게요.` },
     {
       id: 2,
       role: "bot",
-      text: "오늘 몸과 마음이 어땠는지 편하게 들려주세요. 기분, 움직임, 잠, 앰플 사용까지 한 번에 말해도 제가 조용히 정리해둘게요.",
+      text: "오늘 몸과 마음이 어땠는지 편하게 들려주세요. 기분, 움직임, 잠, 숲사이 앰플 사용 여부까지 한 번에 말해도 제가 조용히 정리해둘게요.",
       subtle: true,
     },
   ]);
@@ -281,7 +282,7 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
     { title: "운동", items: ["산책", "러닝", "헬스", "안 함"] },
     { title: "활동", items: ["마스크", "야외", "음주", "특별 없음"] },
     { title: "수면", items: ["부족", "푹 잠", "거의 못 잠"] },
-    { title: "앰플", items: ["사용", "미사용"] },
+    { title: "앰플", items: ["숲사이 사용", "숲사이 미사용"] },
   ];
 
   useEffect(() => {
@@ -308,7 +309,7 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
     setLife(parsed);
     push(
       "bot",
-      `이렇게 이해했어요: ${parsed.emotions.map(e => emotionLabel[e]).join(", ")} / ${exerciseLabel[parsed.exercise]} / ${parsed.context.map(c => contextLabel[c]).join(", ")} / ${sleepMeta[parsed.sleep].label} / 앰플 ${parsed.ampoule ? "사용" : "미사용"}`,
+      `이렇게 이해했어요: ${parsed.emotions.map(e => emotionLabel[e]).join(", ")} / ${exerciseLabel[parsed.exercise]} / ${parsed.context.map(c => contextLabel[c]).join(", ")} / ${sleepMeta[parsed.sleep].label} / 숲사이 앰플 ${parsed.ampoule ? "사용" : "미사용"}`,
       true,
     );
     push("bot", "오늘 흐름이 조금 바빴겠어요. 피부 변화랑 같이 보면 패턴이 더 잘 보일 거예요.");
@@ -340,6 +341,11 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
   };
 
   const saveLog = (note: string) => {
+    const date = todayISO();
+    if (session.completed || session.dailyLogs.some(log => log.date === date)) {
+      push("bot", "오늘 기록은 이미 남겨두었어요. 내일 다시 만나요.");
+      return;
+    }
     const parsedLife = life ?? parseLife("", session.showMenstrualFactor);
     const sleep = sleepMeta[parsedLife.sleep];
     const { empathy, keyword } = analyzeNote(note);
@@ -350,7 +356,7 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
 
     const log: DailyLog = {
       day,
-      date: todayISO(),
+      date,
       concernScores: scores,
       ampouleUsed: parsedLife.ampoule,
       bedtime: sleep.bedtime,
@@ -367,7 +373,7 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
     };
 
     const newLogs = [...session.dailyLogs, log];
-    setSession({ ...session, dailyLogs: newLogs, completed: newLogs.length >= 7 });
+    setSession({ ...session, dailyLogs: newLogs, completed: hasCompletedChallenge(newLogs) });
     push("bot", empathy);
     push("bot", `키워드는 #${keyword} 로 남겨둘게요.`);
     setTimeout(() => {
@@ -439,7 +445,7 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
           <span className="chat-day-chip tnum text-[11px] font-bold px-3.5 py-2">DAY {day} / 7</span>
         </div>
         <div className="flex items-center gap-3 mt-3">
-          <BloomFlower day={day} size={56} />
+          <BloomFlower day={Math.max(0, day - 1)} size={56} />
           <div>
             <div className="font-serif text-[16px] text-plum">오늘의 회복 기록</div>
             <div className="text-[11.5px] text-muted-foreground mt-0.5">{bloomSub[day]}</div>

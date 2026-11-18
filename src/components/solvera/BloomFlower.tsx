@@ -11,7 +11,7 @@ export function BloomFlower({ day, size = 160, className = "", animated = true }
 
   return (
     <div
-      className={`flower-specimen ${isSprout ? "flower-specimen-sprout-only" : ""} ${animated ? "flower-specimen-grow" : ""} ${className}`}
+      className={`flower-specimen ${isSprout ? `flower-specimen-sprout-only flower-specimen-sprout-day-${Math.max(0, roundedDay)}` : ""} ${animated ? "flower-specimen-grow" : ""} ${className}`}
       style={
         {
           width: size,
@@ -24,9 +24,15 @@ export function BloomFlower({ day, size = 160, className = "", animated = true }
     >
       {isSprout ? (
         <svg className="flower-sprout flower-sprout-standing" viewBox="0 0 120 120" aria-hidden="true">
-          <path className="flower-sprout-stem" d="M60 104 L60 39" />
-          <path className="flower-sprout-leaf flower-sprout-leaf-left" d="M57 70 C38 54 20 57 13 78 C35 83 50 79 57 70 Z" />
-          <path className="flower-sprout-leaf flower-sprout-leaf-right" d="M63 62 C84 44 104 48 111 70 C89 78 72 73 63 62 Z" />
+          {roundedDay === 0 ? <ellipse cx="60" cy="98" rx="12" ry="8" fill="#A18B6F" /> : <>
+            <path className="flower-sprout-stem" d={roundedDay <= 1 ? "M60 104 L60 58" : "M60 104 L60 30"} />
+            <path className="flower-sprout-leaf flower-sprout-leaf-left" d="M57 76 C42 61 27 64 22 82 C39 86 51 83 57 76 Z" />
+            <path className="flower-sprout-leaf flower-sprout-leaf-right" d="M63 71 C79 56 95 60 99 78 C81 83 69 79 63 71 Z" />
+            {roundedDay >= 2 && <g className="flower-sprout-new-leaves">
+              <path className="flower-sprout-leaf flower-sprout-leaf-left" d="M57 54 C44 39 31 42 28 58 C43 62 52 59 57 54 Z" />
+              <path className="flower-sprout-leaf flower-sprout-leaf-right" d="M63 49 C77 34 91 38 94 54 C79 59 69 55 63 49 Z" />
+            </g>}
+          </>}
         </svg>
       ) : (
         <>

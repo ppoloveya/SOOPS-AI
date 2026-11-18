@@ -98,6 +98,7 @@ export interface RecoverySession {
   version: number;
   id: string;
   startedAt: string;
+  plantName: string;
   skinType: SkinType;
   sensitivity: number;         // 1-5
   currentCondition: CurrentCondition;
@@ -105,6 +106,8 @@ export interface RecoverySession {
   selectedConcerns: ConcernKey[];
   baselineScores: Partial<Record<ConcernKey, number>>;
   dailyLogs: DailyLog[];
+  wateredDates: string[];
+  fertilizedDates: string[];
   completed: boolean;
 }
 

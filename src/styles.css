@@ -269,6 +269,56 @@ body {
   align-self: end;
 }
 
+.flower-specimen-sprout-day-0 .flower-sprout-standing { height: 30%; }
+.flower-specimen-sprout-day-1 .flower-sprout-standing { height: 46%; }
+.flower-specimen-sprout-day-2 .flower-sprout-standing { height: 62%; }
+.flower-sprout-new-leaves { transform-origin: 60px 60px; animation: sprout-unfurl 900ms cubic-bezier(.2,.86,.22,1) both; }
+@keyframes sprout-unfurl {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.flower-garden { position: relative; width: min(100%, 280px); height: 255px; margin-inline: auto; isolation: isolate; }
+.flower-garden-light { position: absolute; inset: 16px 20px 35px; border-radius: 50%; background: radial-gradient(circle at 50% 72%, rgba(255,255,255,.43), transparent 66%); pointer-events: none; }
+.flower-garden-plant { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2; }
+.flower-garden-soil { position: absolute; left: 13%; right: 13%; bottom: 12px; height: 37px; border-radius: 48% 52% 40% 40% / 65% 63% 35% 35%; background: radial-gradient(ellipse at 50% 18%, #9c8a6a, #766b5d 62%, #59645a); box-shadow: inset 0 5px 8px rgba(255,255,255,.18), 0 11px 17px rgba(54,55,46,.14); z-index: 3; transition: background 500ms ease; }
+.flower-garden-watered .flower-garden-soil { background: radial-gradient(ellipse at 50% 18%, #847d69, #5d675c 62%, #44594f); }
+.flower-garden-can, .flower-garden-fertilizer { position: absolute; bottom: 66px; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; width: 68px; height: 66px; border: 1.5px solid rgba(255,255,255,.92); border-radius: 16px; background: rgba(255,255,255,.52); color: #3f685f; box-shadow: 0 9px 19px rgba(51,73,65,.12); font-size: 11px; font-weight: 700; transition: transform 180ms ease, opacity 180ms ease; }
+.flower-garden-can { right: 1px; }
+.flower-garden-fertilizer { left: 1px; }
+.flower-garden-can-art, .flower-garden-fertilizer-art { display: block; width: 45px; height: 43px; object-fit: contain; pointer-events: none; }
+.flower-garden-can:not(:disabled):hover, .flower-garden-fertilizer:not(:disabled):hover { transform: rotate(-8deg); }
+.flower-garden-can:not(:disabled):active, .flower-garden-fertilizer:not(:disabled):active { transform: rotate(-15deg) scale(.94); }
+.flower-garden-can:disabled, .flower-garden-fertilizer:disabled { opacity: .55; cursor: default; }
+.flower-garden-fertilized .flower-garden-soil { box-shadow: inset 0 5px 8px rgba(255,255,255,.18), 0 11px 17px rgba(54,55,46,.14), 0 0 18px rgba(184,185,107,.36); }
+.flower-garden-water { position: absolute; right: 67px; bottom: 128px; z-index: 5; color: #59b6c0; pointer-events: none; }
+.flower-garden-drop { position: absolute; opacity: 0; animation: garden-drop 850ms ease-in forwards; }
+@keyframes garden-drop { 0% { opacity: 0; transform: translate(0,0) rotate(-20deg); } 25% { opacity: .9; } 100% { opacity: 0; transform: translate(-43px,87px) rotate(24deg); } }
+.flower-garden-nutrients { position: absolute; left: 64px; bottom: 128px; z-index: 5; color: #9a8c55; pointer-events: none; }
+.flower-garden-nutrient { position: absolute; opacity: 0; animation: garden-nutrient 950ms ease-in forwards; }
+@keyframes garden-nutrient { 0% { opacity: 0; transform: translate(0,0) scale(.5); } 25% { opacity: 1; } 100% { opacity: 0; transform: translate(44px,82px) scale(.8); } }
+
+.plant-identity-icon { display: grid; flex: 0 0 36px; place-items: center; width: 36px; height: 36px; border: 1px solid rgba(255,255,255,.82); border-radius: 50%; background: rgba(255,255,255,.42); color: #3f685f; }
+.plant-identity-icon:hover { background: rgba(255,255,255,.7); }
+
+.skin-tip-scene { min-height: 265px; background: #25483f; color: #f7f7ef; border-top: 1px solid rgba(255,255,255,.45); border-bottom: 1px solid rgba(255,255,255,.3); }
+.skin-tip-scene-top, .skin-tip-scene-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.skin-tip-scene-top { color: #c5d9c8; font-size: 10px; letter-spacing: .13em; font-weight: 700; }
+.skin-tip-scene-content { min-height: 158px; padding-top: 22px; animation: skin-tip-appear 240ms ease-out both; }
+.skin-tip-scene-label { color: #e3c6ac; font-size: 11px; font-weight: 700; }
+.skin-tip-scene-content h3 { margin-top: 6px; font-size: 23px; line-height: 1.25; }
+.skin-tip-scene-content p { margin-top: 10px; max-width: 34ch; color: #e4ece3; font-size: 13px; line-height: 1.6; }
+.skin-tip-scene-action { margin-top: 14px; color: #e3c6ac; font-size: 11px; line-height: 1.5; }
+.skin-tip-scene-source { display: inline-flex; align-items: center; gap: 5px; color: #e4ece3; font-size: 11px; text-decoration: underline; text-underline-offset: 3px; }
+.skin-tip-scene-nav { display: flex; align-items: center; gap: 8px; }
+.skin-tip-scene-nav button { display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid rgba(255,255,255,.7); border-radius: 50%; color: #fff; }
+.skin-tip-scene-nav button:disabled { opacity: .35; cursor: default; }
+.skin-tip-scene-progress { display: flex; gap: 5px; margin-top: 17px; }
+.skin-tip-scene-progress span { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.28); }
+.skin-tip-scene-progress span.active { background: #efc9ad; }
+@keyframes skin-tip-appear { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .skin-tip-scene-content, .flower-garden-drop, .flower-garden-nutrient { animation: none; } }
+
 .flower-sprout-stem {
   fill: none;
   stroke: #84A363;

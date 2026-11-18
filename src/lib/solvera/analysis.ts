@@ -1,5 +1,7 @@
 import type { RecoverySession, DailyLog, ConcernKey } from "./types";
 import { CONCERN_LABEL, EMOTION_LABEL, EXERCISE_LABEL, CONTEXT_LABEL } from "./types";
+import { currentStreak, hasCompletedChallenge } from "./streak";
+import { todayISO } from "./storage";
 
 export interface ConcernResult {
   key: ConcernKey;
@@ -42,7 +44,8 @@ export function ampouleUsageRate(session: RecoverySession): number {
 }
 
 export function completionRate(session: RecoverySession): number {
-  return Math.round((session.dailyLogs.length / 7) * 100);
+  if (hasCompletedChallenge(session.dailyLogs)) return 100;
+  return Math.min(100, Math.round((currentStreak(session.dailyLogs, todayISO()) / 7) * 100));
 }
 
 /** Average of that day's selected concern scores. */
@@ -60,10 +63,10 @@ export interface LifestyleFactor {
   withoutDays: number;
   withAvg: number;
   withoutAvg: number;
-  diff: number; // withAvg - withoutAvg (positive = made skin worse)
+  diff: number; // withAvg - withoutAvg; descriptive, not causal
 }
 
-/** Returns lifestyle factors ranked by |diff|, filtered by min occurrence & significance. */
+/** Exploratory within-person contrasts; neither significance nor causation is inferred. */
 export function lifestyleFactors(session: RecoverySession): LifestyleFactor[] {
   const concerns = session.selectedConcerns;
   const scored: { log: DailyLog; score: number }[] = session.dailyLogs
@@ -117,7 +120,7 @@ export function lifestyleFactors(session: RecoverySession): LifestyleFactor[] {
     const withIt: number[] = [];
     const withoutIt: number[] = [];
     for (const s of scored) (c.pred(s.log) ? withIt : withoutIt).push(s.score);
-    if (withIt.length < 2 || withoutIt.length < 1) continue;
+    if (withIt.length < 2 || withoutIt.length < 2) continue;
     const withAvg = withIt.reduce((a, b) => a + b, 0) / withIt.length;
     const withoutAvg = withoutIt.reduce((a, b) => a + b, 0) / withoutIt.length;
     const diff = withAvg - withoutAvg;
@@ -135,30 +138,31 @@ export type RecoveryTypeKey =
 
 export function recoveryType(session: RecoverySession, topFactors: LifestyleFactor[]): { key: RecoveryTypeKey; label: string; desc: string } {
   const top = topFactors[0];
-  if (!top) return { key: "observation", label: "추가 관찰형", desc: "이번 7일은 뚜렷한 단일 요인이 관찰되지 않았어요. 조금 더 기록을 이어가면 패턴이 명확해질 거예요." };
-  if (top.category === "sleep") return { key: "sleep_sensitive", label: "수면 민감형", desc: "수면 시간에 따라 피부 컨디션이 크게 달라지는 유형이에요." };
-  if (top.category === "emotion") return { key: "emotion_reactive", label: "감정 반응형", desc: `${top.label}을(를) 기록한 날 피부 불편 점수가 눈에 띄게 높았고, 감정과 피부 상태가 함께 움직였어요.` };
+  if (!top) return { key: "observation", label: "추가 관찰형", desc: "이번 7일은 비교할 수 있는 날이 충분한 단일 생활 요인이 없었어요. 다음 기록에서 같은 항목을 이어서 살펴보세요." };
+  const desc = `${top.label}을(를) 기록한 ${top.withDays}일의 피부 불편 점수가 기록하지 않은 ${top.withoutDays}일보다 평균 ${Math.abs(top.diff).toFixed(1)}점 ${top.diff > 0 ? "높았어요" : "낮았어요"}. 함께 나타난 패턴이며 원인으로 단정할 수는 없어요.`;
+  if (top.category === "sleep") return { key: "sleep_sensitive", label: "수면 동반형", desc };
+  if (top.category === "emotion") return { key: "emotion_reactive", label: "감정 동반형", desc };
   if (top.category === "context") {
-    if (top.key === "ctx_trip" || top.key === "ctx_longtravel") return { key: "travel_reactive", label: "이동·여행 반응형", desc: "장시간 이동이나 여행이 있는 날 피부 컨디션이 흔들리는 경향이 있어요." };
-    if (top.key === "ctx_outdoor") return { key: "outdoor_reactive", label: "야외활동 반응형", desc: "야외활동을 기록한 날 피부 컨디션이 함께 흔들렸어요." };
-    if (top.key === "ctx_menstrual") return { key: "hormonal", label: "호르몬 변화 관찰형", desc: "생리 주기 전후로 피부 컨디션 변화가 관찰됐어요." };
+    if (top.key === "ctx_trip" || top.key === "ctx_longtravel") return { key: "travel_reactive", label: "이동·여행 동반형", desc };
+    if (top.key === "ctx_outdoor") return { key: "outdoor_reactive", label: "야외활동 동반형", desc };
+    if (top.key === "ctx_menstrual") return { key: "hormonal", label: "주기 동반형", desc };
   }
-  if (top.category === "exercise" || top.category === "environment") return { key: "exercise_heat", label: "운동·열감 반응형", desc: "강도 높은 운동이나 땀·열이 많은 날 피부가 반응하는 유형이에요." };
-  return { key: "routine_stable", label: "루틴 안정형", desc: "생활 요인의 흔들림이 작아 비교적 안정적인 리커버리 패턴을 보였어요." };
+  if (top.category === "exercise" || top.category === "environment") return { key: "exercise_heat", label: "활동 동반형", desc };
+  return { key: "routine_stable", label: "생활 리듬 동반형", desc };
 }
 
 export function nextWeekSuggestion(topFactors: LifestyleFactor[]): string {
   const top = topFactors[0];
-  if (!top) return "다음 7일도 오늘처럼 저녁 앰플 루틴을 일정하게 유지해보세요.";
-  if (top.category === "sleep") return "수면이 부족한 날은 다음 날 피부 점수를 함께 확인하고, 저녁 앰플 단계를 빠뜨리지 마세요.";
-  if (top.category === "emotion") return `다음 7일은 ${top.label}이(가) 높은 날 저녁 루틴을 일정하게 유지해보세요.`;
+  if (!top) return "다음 7일도 같은 시간대에 피부 불편 점수를 기록해 비교 가능한 날을 늘려보세요.";
+  if (top.category === "sleep") return "다음 7일에는 수면 시간과 다음 날 피부 불편 점수를 함께 기록해 패턴이 반복되는지 확인해보세요.";
+  if (top.category === "emotion") return `다음 7일에는 ${top.label}을(를) 느낀 날과 아닌 날의 피부 점수를 계속 비교해보세요.`;
   if (top.category === "context") {
-    if (top.key === "ctx_trip" || top.key === "ctx_longtravel") return "장시간 이동이나 여행이 있는 날에는 보습 루틴을 미리 준비해보세요.";
-    if (top.key === "ctx_outdoor") return "야외활동이 있는 날은 귀가 직후 클렌징과 앰플 루틴을 빠르게 이어가보세요.";
-    if (top.key === "ctx_alcohol") return "음주가 있는 날에는 다음 날 아침 피부 열감을 확인하며 진정 루틴을 이어가세요.";
+    if (top.key === "ctx_trip" || top.key === "ctx_longtravel") return "다음 이동·여행 때도 피부 불편 점수를 같은 기준으로 기록해 이번 패턴과 비교해보세요.";
+    if (top.key === "ctx_outdoor") return "야외활동이 있던 날과 아닌 날의 피부 점수를 다음 주에도 나란히 살펴보세요.";
+    if (top.key === "ctx_alcohol") return "음주한 날과 다음 날의 피부 열감·붉은기 점수를 따로 기록해보세요.";
   }
-  if (top.category === "exercise" || top.category === "environment") return "운동 후에는 피부 열감과 땀을 빠르게 정리하고 앰플 루틴을 이어가보세요.";
-  return "다음 7일도 오늘의 루틴을 이어가며 변화를 관찰해보세요.";
+  if (top.category === "exercise" || top.category === "environment") return "운동한 날의 땀·열감과 피부 점수를 다음 주에도 함께 기록해보세요.";
+  return `다음 7일에는 ${top.label}이(가) 있었던 날의 피부 점수를 다시 비교해보세요.`;
 }
 
 export function sleepMinutesFromTimes(bedtime: string, wakeTime: string): number {

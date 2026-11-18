@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Copy, Info, Instagram, Share2 } from "lucide-react";
 import { BloomFlower } from "./BloomFlower";
+import { FlowerGarden } from "./FlowerGarden";
+import { PlantIdentity } from "./PlantIdentity";
+import { SkinTipScene } from "./SkinTipScene";
 import { SleepDial } from "./SleepDial";
 import { ChatDailyFlow } from "./ChatDailyFlow";
 import {
@@ -10,14 +14,14 @@ import {
 } from "@/lib/solvera/types";
 import { loadSession, saveSession, clearSession, todayISO } from "@/lib/solvera/storage";
 import { buildDemoSession } from "@/lib/solvera/demo";
+import { CONCERN_EXAMPLES, SCORE_BANDS, scoreBandIndex } from "@/lib/solvera/scale";
+import { completedChallengeLogs, currentStreak, hasCompletedChallenge } from "@/lib/solvera/streak";
+import { GROWTH_STAGES, MAX_GROWTH_XP, growthProgress } from "@/lib/solvera/growth";
 import { topKeyword } from "@/lib/solvera/keyword";
 import {
-  concernResults, averageImprovement, ampouleUsageRate, completionRate,
+  concernResults, dailyDiscomfort, ampouleUsageRate, completionRate,
   lifestyleFactors, recoveryType, nextWeekSuggestion, sleepMinutesFromTimes, sleepCategoryFrom,
 } from "@/lib/solvera/analysis";
-
-// dev-mode flag: allow "next day" without waiting for calendar day
-const DEV_MODE = true;
 
 type Phase =
   | "landing" | "consent" | "profile" | "concerns" | "baseline" | "dashboard"
@@ -39,10 +43,10 @@ export function SolveraApp() {
 
   const startFresh = () => {
     const s: RecoverySession = {
-      version: 1, id: crypto.randomUUID(), startedAt: new Date().toISOString(),
+      version: 1, id: crypto.randomUUID(), startedAt: new Date().toISOString(), plantName: "나의 찔레꽃",
       skinType: "unknown", sensitivity: 3, currentCondition: "same",
       showMenstrualFactor: false, selectedConcerns: [], baselineScores: {},
-      dailyLogs: [], completed: false,
+      dailyLogs: [], wateredDates: [], fertilizedDates: [], completed: false,
     };
     setSession(s); setDemoMode(false); setPhase("consent");
   };
@@ -74,8 +78,8 @@ export function SolveraApp() {
       {phase === "dashboard" && session && <Dashboard session={session} setSession={setSession} onDaily={() => setPhase("daily")} onChatDaily={() => setPhase("chat-daily")} onReport={() => setPhase("report")} onReset={resetAll} />}
       {phase === "chat-daily" && session && <ChatDailyFlow session={session} setSession={setSession} onDone={() => setPhase("day-complete")} onCancel={() => setPhase("dashboard")} />}
       {phase === "daily" && session && <DailyFlow session={session} setSession={setSession} onDone={() => setPhase("day-complete")} onCancel={() => setPhase("dashboard")} />}
-      {phase === "day-complete" && session && <DayComplete session={session} onContinue={() => setPhase("dashboard")} />}
-      {phase === "report" && session && <Report session={session} demoMode={demoMode} onBack={() => demoMode ? setPhase("landing") : setPhase("dashboard")} onReset={resetAll} />}
+      {phase === "day-complete" && session && <DayComplete session={session} setSession={setSession} onContinue={() => setPhase(session.completed ? "report" : "dashboard")} />}
+      {phase === "report" && session && <Report session={demoMode ? session : { ...session, dailyLogs: completedChallengeLogs(session.dailyLogs) }} demoMode={demoMode} onBack={() => demoMode ? setPhase("landing") : setPhase("dashboard")} onReset={resetAll} />}
     </div>
   );
 }
@@ -138,6 +142,35 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 
 function FieldRecordLabel({ n }: { n: string }) {
   return <div className="text-[10px] tracking-brand text-muted-foreground uppercase">FIELD RECORD · {n}</div>;
+}
+
+function waterToday(session: RecoverySession, setSession: (session: RecoverySession) => void) {
+  const date = todayISO();
+  if (!growthProgress(session, date).canWater) return;
+  setSession({ ...session, wateredDates: [...session.wateredDates, date] });
+}
+
+function fertilizeToday(session: RecoverySession, setSession: (session: RecoverySession) => void) {
+  const date = todayISO();
+  if (!growthProgress(session, date).canFertilize) return;
+  setSession({ ...session, fertilizedDates: [...session.fertilizedDates, date] });
+}
+
+function GrowthMeter({ session }: { session: RecoverySession }) {
+  const { day, xp, canWater, wateredToday, canFertilize, fertilizedToday } = growthProgress(session, todayISO());
+  const status = fertilizedToday ? "영양을 머금고 있어요" : canFertilize ? "비료를 줄 수 있어요" : wateredToday ? "촉촉하게 자라는 중" : canWater ? "물이 필요해요" : day === 0 ? "오늘의 첫 기록을 기다려요" : day === 7 ? "찔레꽃이 피었어요" : "다음 기록을 기다려요";
+  return (
+    <div className="mx-auto w-full max-w-[340px]" aria-live="polite">
+      <div className="flex items-end justify-between gap-2">
+        <div><div className="text-[10px] tracking-brand text-charcoal/50">내 꽃의 상태</div><div className="mt-1 font-serif text-[17px] text-plum">{GROWTH_STAGES[day]} · {status}</div></div>
+        <div className="shrink-0 text-right"><span className="tnum text-[19px] font-bold text-forest">{xp}</span><span className="text-[11px] text-charcoal/50"> / {MAX_GROWTH_XP} XP</span></div>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/55" role="progressbar" aria-label="꽃 성장 경험치" aria-valuenow={xp} aria-valuemin={0} aria-valuemax={MAX_GROWTH_XP}>
+        <div className="h-full rounded-full bg-[#6d9f76] transition-[width] duration-700" style={{ width: `${(xp / MAX_GROWTH_XP) * 100}%` }} />
+      </div>
+      <div className="mt-2 text-[11px] text-charcoal/55">기록 +80 · 물 +20 · 비료 +30 XP (2·4·6일차)</div>
+    </div>
+  );
 }
 
 /* =============================================================================
@@ -363,7 +396,7 @@ function Baseline({ session, setSession, onNext, onBack }: { session: RecoverySe
 
       <div className="space-y-4">
         {session.selectedConcerns.map(k => (
-          <MoodScoreCard key={k} label={CONCERN_LABEL[k]} value={scores[k] ?? null} onChange={v => setScore(k, v)} />
+          <MoodScoreCard key={k} concern={k} value={scores[k] ?? null} onChange={v => setScore(k, v)} />
         ))}
       </div>
     </Screen>
@@ -388,9 +421,11 @@ function ScoreCard({ label, value, onChange }: { label: string; value: number | 
   );
 }
 
-function MoodScoreCard({ label, value, onChange }: { label: string; value: number | null; onChange: (v: number) => void }) {
+function MoodScoreCard({ concern, value, onChange }: { concern: ConcernKey; value: number | null; onChange: (v: number) => void }) {
   const v = value ?? 5;
   const mood = discomfortMood(v);
+  const [showGuide, setShowGuide] = useState(false);
+  const band = scoreBandIndex(v);
   return (
     <div
       className="glass-surface rounded-[28px] p-4 transition-colors duration-300"
@@ -398,7 +433,7 @@ function MoodScoreCard({ label, value, onChange }: { label: string; value: numbe
     >
       <div className="flex items-baseline justify-between">
         <div>
-          <div className="text-[14px] font-medium text-plum">{label}</div>
+          <div className="text-[14px] font-medium text-plum">{CONCERN_LABEL[concern]}</div>
           <div
             className="mt-1 inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold"
             style={{ color: mood.color, background: mood.badge }}
@@ -427,6 +462,21 @@ function MoodScoreCard({ label, value, onChange }: { label: string; value: numbe
       <div className="flex justify-between text-[10px] text-muted-foreground px-0.5 mt-0.5">
         <span>0</span><span>5</span><span>10</span>
       </div>
+      <div className="mt-2 flex items-start justify-between gap-2 text-[12px] leading-5" style={{ color: mood.color }}>
+        <span>{SCORE_BANDS[band]}점 · {CONCERN_EXAMPLES[concern][band]}</span>
+        <button type="button" onClick={() => setShowGuide(!showGuide)} aria-expanded={showGuide}
+          aria-label={`${CONCERN_LABEL[concern]} 점수 기준 ${showGuide ? "닫기" : "보기"}`}
+          title="점수 기준 보기" className="shrink-0 rounded-full p-1 hover:bg-white/40">
+          <Info size={17} aria-hidden="true" />
+        </button>
+      </div>
+      {showGuide && <div className="mt-2 space-y-1.5 border-t border-white/60 pt-3">
+        {CONCERN_EXAMPLES[concern].map((example, index) => (
+          <div key={index} className={`flex gap-2 text-[11px] leading-5 ${index === band ? "font-semibold text-plum" : "text-charcoal/65"}`}>
+            <span className="w-9 shrink-0 tnum">{SCORE_BANDS[index]}</span><span>{example}</span>
+          </div>
+        ))}
+      </div>}
     </div>
   );
 }
@@ -478,35 +528,29 @@ function discomfortMood(v: number) {
    DASHBOARD
 ============================================================================= */
 function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onReset }: { session: RecoverySession; setSession: (s: RecoverySession) => void; onDaily: () => void; onChatDaily: () => void; onReport: () => void; onReset: () => void }) {
-  const done = session.dailyLogs.length;
+  const growth = growthProgress(session, todayISO());
+  const done = growth.day;
   const day = Math.min(done + 1, 7);
-  const canDaily = done < 7;
-  const canReport = done >= 7 || session.completed;
+  const canDaily = !session.completed;
+  const canReport = session.completed;
   const todayLogged = session.dailyLogs.some(l => l.date === todayISO());
-
-  const advanceDay = () => {
-    // dev-only: nothing to advance; days are just count of logs. This helper is a no-op button
-    // but we can simulate 'passing a day' by allowing another daily entry immediately.
-    // Just navigate to daily.
-    onDaily();
-  };
 
   return (
     <Screen
       header={<TopBar subtitle={`DAY ${day} / 7`} title="리커버리 진행" />}
     >
       <FieldRecordLabel n="DASHBOARD" />
-      <div className="mt-3 flex items-center justify-between">
-        <div>
-          <div className="font-serif text-[26px] text-plum leading-tight">DAY {day}</div>
-          <div className="text-[13px] text-muted-foreground mt-1">개화까지 {Math.max(0, 7 - done)}일 남았어요</div>
-        </div>
-        <BloomFlower day={day} size={138} />
+      <div className="mt-3 text-center">
+        <div className="font-serif text-[26px] text-plum leading-tight">DAY {day}</div>
+        <div className="text-[13px] text-muted-foreground mt-1">{done === 7 ? "오늘의 찔레꽃이 피었어요" : `개화까지 ${7 - done}일 남았어요`}</div>
       </div>
+      <FlowerGarden day={done} canWater={growth.canWater} wateredToday={growth.wateredToday} canFertilize={growth.canFertilize} fertilizedToday={growth.fertilizedToday} onWater={() => waterToday(session, setSession)} onFertilize={() => fertilizeToday(session, setSession)} />
+      <GrowthMeter session={session} />
+      <PlantIdentity session={session} onNameChange={plantName => setSession({ ...session, plantName })} />
 
       <Card className="mt-6">
         <div className="flex justify-between text-[11px] text-muted-foreground mb-2">
-          <span>진행률</span><span className="tnum">{done}/7</span>
+          <span>연속 기록</span><span className="tnum">{done}/7</span>
         </div>
         <div className="h-2 rounded-full bg-white/45 overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
           <div className="h-full transition-all" style={{ width: `${(done/7)*100}%`, background: "linear-gradient(90deg, var(--rose), var(--lilac), var(--sky))" }} />
@@ -514,8 +558,7 @@ function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onRese
         <div className="grid grid-cols-7 gap-1.5 mt-4">
           {Array.from({length: 7}).map((_, i) => {
             const n = i + 1;
-            const log = session.dailyLogs[i];
-            const isDone = !!log;
+            const isDone = n <= done;
             const isCurrent = n === day && !isDone;
             return (
               <div key={n} className={`aspect-square rounded-[20px] flex flex-col items-center justify-center border-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] backdrop-blur-sm ${
@@ -533,7 +576,7 @@ function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onRese
 
       <div className="mt-6 space-y-3">
         {canDaily && (
-          todayLogged && !DEV_MODE
+          todayLogged
             ? <div className="text-center text-[13px] text-muted-foreground py-3">오늘 기록을 완료했어요. 내일 다시 만나요.</div>
             : (
               <>
@@ -543,19 +586,17 @@ function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onRese
             )
         )}
         {canReport && <PrimaryButton onClick={onReport} variant={canDaily ? "outline" : "primary"}>최종 리포트 보기</PrimaryButton>}
-        {!canReport && DEV_MODE && (
-          <PrimaryButton onClick={advanceDay} variant="ghost">
-            (개발 모드) 다음 날 기록하기
-          </PrimaryButton>
-        )}
+        {!session.completed && done === 0 && session.dailyLogs.length > 0 && <p className="text-center text-[12px] text-charcoal/65">연속 기록이 끊겼어요. 오늘부터 다시 꽃을 키워볼까요?</p>}
       </div>
+
+      <SkinTipScene concerns={session.selectedConcerns} />
 
       {session.dailyLogs.length > 0 && (
         <div className="mt-8">
-          <div className="text-[11px] tracking-brand text-muted-foreground uppercase mb-2">기록된 날짜</div>
+          <div className="text-[11px] tracking-brand text-muted-foreground uppercase mb-2">전체 기록된 날짜</div>
           <div className="space-y-1.5">
             {session.dailyLogs.map(l => (
-              <div key={l.day} className="glass-pill flex justify-between text-[13px] py-2 px-3 rounded-full">
+              <div key={l.date} className="glass-pill flex justify-between text-[13px] py-2 px-3 rounded-full">
                 <span className="text-plum">DAY {l.day}</span>
                 <span className="tnum text-muted-foreground">{l.date}</span>
               </div>
@@ -575,7 +616,7 @@ function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onRese
    DAILY FLOW (5 steps)
 ============================================================================= */
 function DailyFlow({ session, setSession, onDone, onCancel }: { session: RecoverySession; setSession: (s: RecoverySession) => void; onDone: () => void; onCancel: () => void }) {
-  const day = Math.min(session.dailyLogs.length + 1, 7);
+  const day = Math.min(currentStreak(session.dailyLogs, todayISO()) + 1, 7);
   const [step, setStep] = useState(1);
 
   // Draft state — only persisted on final save
@@ -595,9 +636,14 @@ function DailyFlow({ session, setSession, onDone, onCancel }: { session: Recover
   const showToast = (m: string) => { setWarn(m); setTimeout(() => setWarn(null), 1500); };
 
   const save = () => {
+    const date = todayISO();
+    if (session.completed || session.dailyLogs.some(log => log.date === date)) {
+      showToast("오늘 기록은 이미 완료했어요.");
+      return;
+    }
     const sleepMin = sleepMinutesFromTimes(bedtime, wakeTime);
     const log: DailyLog = {
-      day, date: todayISO(),
+      day, date,
       concernScores, ampouleUsed: !!ampoule,
       bedtime, wakeTime,
       sleepMinutes: sleepMin,
@@ -609,7 +655,7 @@ function DailyFlow({ session, setSession, onDone, onCancel }: { session: Recover
       contextFactors: context.length ? context : ["none"],
     };
     const newLogs = [...session.dailyLogs, log];
-    const completed = newLogs.length >= 7;
+    const completed = hasCompletedChallenge(newLogs);
     setSession({ ...session, dailyLogs: newLogs, completed });
     onDone();
   };
@@ -646,14 +692,14 @@ function DailyFlow({ session, setSession, onDone, onCancel }: { session: Recover
           <h2 className="font-serif text-[22px] text-plum mt-2 mb-6">오늘 피부는 어떤가요?</h2>
           <div className="space-y-4">
             {session.selectedConcerns.map(k => (
-              <MoodScoreCard key={k} label={CONCERN_LABEL[k]} value={concernScores[k] ?? null}
+              <MoodScoreCard key={k} concern={k} value={concernScores[k] ?? null}
                 onChange={v => setConcernScores({ ...concernScores, [k]: v })} />
             ))}
           </div>
-          <Section title="앰플 사용">
+          <Section title="숲사이 앰플을 사용했어요">
             <div className="grid grid-cols-2 gap-2">
-              <Chip active={ampoule === true} onClick={() => setAmpoule(true)}>사용함</Chip>
-              <Chip active={ampoule === false} onClick={() => setAmpoule(false)}>사용하지 않음</Chip>
+              <Chip active={ampoule === true} onClick={() => setAmpoule(true)}>네, 사용했어요</Chip>
+              <Chip active={ampoule === false} onClick={() => setAmpoule(false)}>아니요</Chip>
             </div>
           </Section>
         </>
@@ -842,9 +888,10 @@ function SleepStep({ bedtime, wakeTime, setBedtime, setWakeTime }: { bedtime: st
 /* =============================================================================
    DAY COMPLETE
 ============================================================================= */
-function DayComplete({ session, onContinue }: { session: RecoverySession; onContinue: () => void }) {
+function DayComplete({ session, setSession, onContinue }: { session: RecoverySession; setSession: (session: RecoverySession) => void; onContinue: () => void }) {
   const last = session.dailyLogs[session.dailyLogs.length - 1];
-  const done = session.dailyLogs.length;
+  const growth = growthProgress(session, todayISO());
+  const done = growth.day;
   const day = Math.min(done, 7);
   // Compare each concern to baseline
   const changes = session.selectedConcerns.map(k => {
@@ -863,15 +910,26 @@ function DayComplete({ session, onContinue }: { session: RecoverySession; onCont
 
   return (
     <Screen
-      footer={<PrimaryButton onClick={onContinue}>{session.completed ? "리포트 확인하기" : "진행 현황으로"}</PrimaryButton>}
+      footer={<PrimaryButton onClick={onContinue}>{session.completed ? "내 리포트 보기" : "진행 현황으로"}</PrimaryButton>}
     >
-      <div className="pt-8 text-center">
-        <BloomFlower day={day} size={148} />
-        <div className="text-[11px] tracking-brand text-muted-foreground uppercase mt-4">DAY {day} · COMPLETE</div>
-        <h2 className="font-serif text-[26px] text-plum mt-2">오늘 기록 완료</h2>
-        <p className="text-[13px] text-muted-foreground mt-1">지금까지 {done}일을 기록했어요.</p>
+      <div className="pt-5 text-center">
+        <div className="inline-flex items-center rounded-full border border-white/80 bg-white/40 px-4 py-1.5 text-[11px] font-semibold tracking-brand text-forest">오늘의 성장 +{80 + (growth.wateredToday ? 20 : 0) + (growth.fertilizedToday ? 30 : 0)} XP</div>
+        <FlowerGarden day={day} canWater={growth.canWater} wateredToday={growth.wateredToday} canFertilize={growth.canFertilize} fertilizedToday={growth.fertilizedToday} onWater={() => waterToday(session, setSession)} onFertilize={() => fertilizeToday(session, setSession)} />
+        <div className="text-[11px] tracking-brand text-muted-foreground uppercase mt-1">DAY {day} · COMPLETE</div>
+        <h2 className="font-serif text-[26px] text-plum mt-2">{day === 1 ? "첫 새싹이 올라왔어요" : day === 2 ? "새 잎이 펼쳐졌어요" : day === 7 ? "찔레꽃이 피었어요" : "오늘 기록 완료"}</h2>
+        <p className="text-[13px] text-muted-foreground mt-1">{done}일 연속 기록했어요.</p>
         {!session.completed && <p className="text-[13px] text-charcoal/70 mt-1">개화까지 {7 - done}일 남았어요.</p>}
+        {session.completed && <p className="text-[13px] text-plum mt-2">7일 챌린지를 완성했어요. 리포트를 확인해보세요.</p>}
       </div>
+
+      <div className="mt-5"><GrowthMeter session={session} /></div>
+      <PlantIdentity session={session} onNameChange={plantName => setSession({ ...session, plantName })} />
+
+      <div className="mt-6 flex justify-center gap-2" aria-label={`7일 챌린지 ${done}일 완료`}>
+        {Array.from({ length: 7 }, (_, index) => <span key={index} className={`flex h-9 w-9 items-center justify-center rounded-full border text-[12px] font-semibold ${index < done ? "border-white bg-white/65 text-plum" : "border-white/65 bg-white/20 text-charcoal/40"}`}>{index < done ? "✓" : index + 1}</span>)}
+      </div>
+      <SkinTipScene concerns={session.selectedConcerns} />
+      {session.completed && <RewardRequest session={session} />}
 
       <div className="mt-8 space-y-2">
         {changes.map((t, i) => (
@@ -883,20 +941,76 @@ function DayComplete({ session, onContinue }: { session: RecoverySession; onCont
   );
 }
 
+function RewardRequest({ session }: { session: RecoverySession }) {
+  const [copied, setCopied] = useState(false);
+  const requestText = `SOOPSAI 7일 피부 일기 챌린지를 완료했어요. 쿠폰 신청 ID: ${session.id.slice(0, 8).toUpperCase()}`;
+  const copyRequest = async () => {
+    try {
+      await navigator.clipboard.writeText(requestText);
+      setCopied(true);
+    } catch {
+      window.prompt("아래 문구를 복사해 DM으로 보내주세요.", requestText);
+    }
+  };
+  return (
+    <div className="mt-6 rounded-[8px] border border-white/70 bg-white/35 p-4 text-left">
+      <div className="text-[11px] tracking-brand text-plum/60">7-DAY REWARD</div>
+      <h3 className="mt-1 font-serif text-[17px] text-plum">7일 챌린지 달성</h3>
+      <p className="mt-2 text-[12px] leading-5 text-charcoal/70">3,000원 쿠폰은 인스타그램 DM으로 신청하세요. 운영자가 기록을 확인한 뒤 발급 방법과 사용 조건을 안내합니다.</p>
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button type="button" onClick={copyRequest} className="flex min-h-11 items-center justify-center gap-2 rounded-full border border-white bg-white/40 px-3 text-[12px] font-semibold text-plum">
+          <Copy size={15} aria-hidden="true" />{copied ? "신청 문구 복사됨" : "신청 문구 복사"}
+        </button>
+        <a href="https://ig.me/m/soopsai_official" target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center justify-center gap-2 rounded-full border border-white bg-white/65 px-3 text-[12px] font-semibold text-plum">
+          <Instagram size={16} aria-hidden="true" />인스타그램 DM 열기
+        </a>
+      </div>
+      <p className="mt-2 text-[11px] text-charcoal/55">DM을 열고 복사한 문구와 완료 화면 캡처를 보내주세요. 이 화면만으로 쿠폰이 발급되지는 않습니다.</p>
+    </div>
+  );
+}
+
 /* =============================================================================
    REPORT
 ============================================================================= */
 function Report({ session, demoMode, onBack, onReset }: { session: RecoverySession; demoMode: boolean; onBack: () => void; onReset: () => void }) {
+  const [shareStatus, setShareStatus] = useState("");
   const results = useMemo(() => concernResults(session), [session]);
-  const avg = useMemo(() => averageImprovement(session), [session]);
   const usage = useMemo(() => ampouleUsageRate(session), [session]);
   const compl = useMemo(() => completionRate(session), [session]);
   const factors = useMemo(() => lifestyleFactors(session), [session]);
   const rtype = useMemo(() => recoveryType(session, factors), [session, factors]);
   const suggestion = useMemo(() => nextWeekSuggestion(factors), [factors]);
 
-  const topImprove = [...results].sort((a, b) => (b.improvement ?? -1) - (a.improvement ?? -1))[0];
-  const sortedResults = [...results].sort((a, b) => (b.improvement ?? b.delta) - (a.improvement ?? a.delta));
+  const sortedResults = [...results].sort((a, b) => b.delta - a.delta);
+  const baselineMean = results.length ? results.reduce((sum, result) => sum + result.start, 0) / results.length : null;
+  const finalMean = session.dailyLogs.length ? dailyDiscomfort(session.dailyLogs[session.dailyLogs.length - 1], session.selectedConcerns) : null;
+  const shareReport = async () => {
+    const lines = [
+      "SOOPSAI · 나만의 7일 피부 일기",
+      `나의 관찰 유형: ${rtype.label}`,
+      baselineMean !== null && finalMean !== null ? `평균 불편 점수: ${baselineMean.toFixed(1)}점 → ${finalMean.toFixed(1)}점` : "",
+      factors[0] ? `함께 변한 생활 요인: ${factors[0].label} (있던 날 ${factors[0].withDays}일, 없던 날 ${factors[0].withoutDays}일)` : "",
+      ...results.map(result => `${result.label}: ${result.start}점 → ${result.end}점`),
+      "자가 기록의 동반 패턴이며 원인이나 제품 효과를 판정한 결과는 아니에요.",
+      window.location.origin,
+    ].filter(Boolean);
+    const text = lines.join("\n");
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "SOOPSAI 7일 피부 일기", text });
+        setShareStatus("리포트 요약을 공유했어요.");
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        setShareStatus("리포트 요약을 복사했어요.");
+      } else {
+        window.prompt("리포트 요약을 복사해 공유하세요.", text);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setShareStatus("공유하지 못했어요. 다시 시도해주세요.");
+    }
+  };
 
   return (
     <div className="min-h-full">
@@ -915,30 +1029,28 @@ function Report({ session, demoMode, onBack, onReset }: { session: RecoverySessi
           <div className="relative z-10 text-[10px] tracking-brand text-white/60 uppercase">RECOVERY REPORT · N°{session.id.slice(0,6).toUpperCase()}</div>
           <div className="relative z-10 font-serif tracking-[0.3em] text-[16px] text-white/85 mt-1">SOOPSAI</div>
           <div className="relative z-10 mt-6">
-            <div className="text-[11px] tracking-brand text-white/60 uppercase">평균 개선</div>
-            <div className="tnum font-bold leading-none text-white mt-2" style={{ fontSize: 56 }}>
-              {avg !== null ? `${avg}%` : "–"}
-            </div>
+            <div className="text-[11px] tracking-brand text-white/60 uppercase">나의 관찰 유형</div>
+            <div className="mt-2 font-serif text-[28px] font-bold leading-tight text-white">{rtype.label}</div>
             <p className="mt-4 font-serif text-[17px] leading-[1.5] text-white/95 max-w-[220px]">
-              {avg !== null
-                ? `SOOPSAI 리커버리 앰플과 함께한 7일 동안 주요 피부 고민이 평균 ${avg}% 개선되었어요.`
-                : "7일 동안의 기록이 완료됐어요."}
+              {factors[0] ? `${factors[0].label}이(가) 있던 날과 없던 날, 피부 불편 점수에 차이가 있었어요.` : "이번 7일은 비교 가능한 생활 요인이 충분하지 않았어요."}
             </p>
-            <p className="text-[10px] text-white/50 mt-2">사용자가 직접 기록한 점수 기준</p>
+            <p className="text-[10px] text-white/60 mt-2">7일 자가 기록에서 관찰된 패턴 · 원인 판정 아님</p>
           </div>
         </div>
+
+        <p className="px-1 text-[12px] leading-[1.6] text-charcoal/70">{rtype.desc}</p>
 
         {/* Small cards */}
         <div className="grid grid-cols-2 gap-3 print-avoid-break">
           <Card className="min-h-[110px]">
-            <div className="text-[11px] tracking-brand text-muted-foreground uppercase">최대 개선</div>
-            <div className="mt-2 font-serif text-[17px] text-plum leading-tight break-keep">{topImprove?.label ?? "–"}</div>
+            <div className="text-[11px] tracking-brand text-muted-foreground uppercase">평균 불편 점수</div>
+            <div className="mt-2 font-serif text-[15px] text-plum leading-tight break-keep">선택한 고민 {results.length}개 기준</div>
             <div className="tnum font-bold text-plum mt-1" style={{ fontSize: 24 }}>
-              {topImprove?.improvement !== null && topImprove?.improvement !== undefined ? `${topImprove.improvement}%` : `-${topImprove?.delta ?? 0}pt`}
+              {baselineMean !== null && finalMean !== null ? `${baselineMean.toFixed(1)} → ${finalMean.toFixed(1)}` : "–"}
             </div>
           </Card>
           <Card className="min-h-[110px]">
-            <div className="text-[11px] tracking-brand text-muted-foreground uppercase">앰플 사용률</div>
+            <div className="text-[11px] tracking-brand text-muted-foreground uppercase">숲사이 앰플 사용 기록</div>
             <div className="tnum font-bold text-plum mt-2" style={{ fontSize: 32 }}>{usage}%</div>
             <div className="text-[11px] text-muted-foreground mt-1 tnum">기록 {session.dailyLogs.length}일 기준</div>
           </Card>
@@ -950,15 +1062,35 @@ function Report({ session, demoMode, onBack, onReset }: { session: RecoverySessi
           <span>선택 고민 {session.selectedConcerns.length}개</span>
         </div>
 
+        <section className="space-y-3">
+          <SectionTitle n="LIFESTYLE PATTERN" title="생활 요인과 피부의 동반 변화" />
+          {factors.length === 0
+            ? <Card><div className="text-[13px] text-charcoal/70 leading-[1.6]">각 요인이 있던 날과 없던 날을 2일 이상씩 비교할 자료가 부족하거나, 평균 차이가 0.5점 미만이었어요.</div></Card>
+            : factors.map((f, i) => (
+                <Card key={f.key} className="print-avoid-break">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="font-serif text-[17px] text-plum">{i + 1}. {f.label}</div>
+                    <div className={`tnum shrink-0 font-bold text-[18px] ${f.diff > 0 ? "text-destructive" : "text-moss"}`}>{f.diff > 0 ? "+" : ""}{f.diff.toFixed(1)}점</div>
+                  </div>
+                  <div className="mt-2 text-[12px] leading-[1.6] text-charcoal/75">있던 날 {f.withDays}일 · 평균 {f.withAvg.toFixed(1)}점<br />없던 날 {f.withoutDays}일 · 평균 {f.withoutAvg.toFixed(1)}점</div>
+                  <p className="mt-2 text-[11px] leading-[1.5] text-muted-foreground">두 그룹의 자가 기록 평균 차이예요. 원인 관계는 알 수 없어요.</p>
+                </Card>
+              ))}
+          <details className="px-1 text-[11px] leading-[1.6] text-charcoal/65">
+            <summary className="cursor-pointer font-semibold text-forest">분석 기준 보기</summary>
+            <p className="mt-2">그날 선택한 고민 점수의 평균을 사용했어요. 생활 요인이 있던 날과 없던 날이 각각 2일 이상이고 평균 차이가 0.5점 이상인 경우만 표시합니다. 7일 기록의 탐색적 비교이며 통계적 유의성이나 제품 효과를 뜻하지 않아요.</p>
+          </details>
+        </section>
+
         {/* Concern change cards */}
         <section className="space-y-3">
           <SectionTitle n="CONCERN CHANGE" title="고민별 변화" />
-          {sortedResults.map((r, i) => (
+          {sortedResults.map(r => (
             <Card key={r.key} className="print-avoid-break">
               <div className="flex items-baseline justify-between">
                 <div className="font-serif text-[17px] text-plum">{r.label}</div>
                 <div className="tnum font-bold text-plum text-[22px]">
-                  {r.improvement !== null ? `${r.improvement}%` : `-${r.delta}pt`}
+                  {r.delta > 0 ? `-${r.delta}점` : r.delta < 0 ? `+${-r.delta}점` : "변화 없음"}
                 </div>
               </div>
               <div className="flex items-center gap-3 mt-2">
@@ -966,37 +1098,10 @@ function Report({ session, demoMode, onBack, onReset }: { session: RecoverySessi
                 <div className="flex-1"><Sparkline data={r.series} /></div>
               </div>
               <div className="text-[12px] text-charcoal/70 mt-2 leading-[1.6]">
-                {i === 0 && (r.improvement ?? 0) > 0 && "이번 기록에서 가장 큰 변화가 나타났어요."}
-                {i > 0 && (r.improvement ?? 0) > 20 && "꾸준히 낮아지는 흐름이 확인됐어요."}
-                {i > 0 && (r.improvement ?? 0) > 0 && (r.improvement ?? 0) <= 20 && "완만하게 낮아졌어요."}
-                {(r.improvement ?? 0) <= 0 && "점수 변화가 크지 않았어요."}
+                {r.delta > 0 ? `${r.label} 불편 점수가 시작일보다 ${r.delta}점 낮게 기록됐어요.` : r.delta < 0 ? `${r.label} 불편 점수가 시작일보다 ${-r.delta}점 높게 기록됐어요.` : "시작일과 같은 점수로 기록됐어요."}
               </div>
             </Card>
           ))}
-        </section>
-
-        {/* Lifestyle factors */}
-        <section className="space-y-3">
-          <SectionTitle n="LIFESTYLE FACTORS" title="피부에 영향을 준 요인" />
-          {factors.length === 0
-            ? <Card><div className="text-[13px] text-charcoal/70 leading-[1.6]">뚜렷한 생활 요인 차이가 관찰되지 않았어요. 다음 7일도 기록을 이어가면 패턴이 더 명확해져요.</div></Card>
-            : factors.map((f, i) => (
-                <Card key={f.key} className="print-avoid-break">
-                  <div className="flex items-baseline justify-between">
-                    <div className="font-serif text-[17px] text-plum">{i+1}. {f.label}</div>
-                    <div className={`tnum font-bold text-[18px] ${f.diff > 0 ? "text-destructive" : "text-moss"}`}>
-                      {f.diff > 0 ? "+" : ""}{f.diff.toFixed(1)}pt
-                    </div>
-                  </div>
-                  <div className="text-[12px] text-muted-foreground mt-1 tnum">있었던 날 {f.withAvg.toFixed(1)}점 · 없었던 날 {f.withoutAvg.toFixed(1)}점</div>
-                  <div className="text-[12px] text-charcoal/70 mt-2 leading-[1.6]">
-                    {f.diff > 0
-                      ? `${f.label}이(가) 있었던 날 피부 불편 점수가 다른 날보다 평균 ${f.diff.toFixed(1)}점 높게 기록됐어요.`
-                      : `${f.label}이(가) 있었던 날 피부 컨디션이 다른 날보다 안정적이었어요.`}
-                  </div>
-                </Card>
-              ))
-          }
         </section>
 
         {/* Emotional summary — 자유 입력 기반, 정형 데이터와 분리 */}
@@ -1026,17 +1131,6 @@ function Report({ session, demoMode, onBack, onReset }: { session: RecoverySessi
           </section>
         )}
 
-        {/* Recovery type */}
-        <section className="space-y-3">
-          <SectionTitle n="RECOVERY TYPE" title="이번 7일의 리커버리 유형" />
-          <Card className="print-avoid-break bg-[color-mix(in_oklab,var(--lilac)_16%,var(--card))]">
-            <div className="text-[11px] tracking-brand text-plum/60 uppercase">YOUR TYPE</div>
-            <div className="font-serif text-[22px] text-plum mt-1">{rtype.label}</div>
-            <p className="text-[13px] text-charcoal/75 mt-3 leading-[1.7]">{rtype.desc}</p>
-            <p className="text-[10px] text-muted-foreground mt-3">이번 기록을 바탕으로 분류한 생활 패턴이며 의학적 진단이 아닙니다.</p>
-          </Card>
-        </section>
-
         {/* Next 7 days */}
         <section className="space-y-3">
           <SectionTitle n="NEXT 7 DAYS" title="다음 7일 제안" />
@@ -1045,7 +1139,11 @@ function Report({ session, demoMode, onBack, onReset }: { session: RecoverySessi
           </Card>
         </section>
 
+        {!demoMode && <RewardRequest session={session} />}
+
         <div className="pt-4 no-print space-y-3">
+          {!demoMode && <PrimaryButton onClick={shareReport}><span className="inline-flex items-center gap-2"><Share2 size={17} aria-hidden="true" />리포트 요약 공유</span></PrimaryButton>}
+          {shareStatus && <p className="text-center text-[12px] text-plum" role="status">{shareStatus}</p>}
           <PrimaryButton onClick={() => window.print()} variant="outline">인쇄 · PDF로 저장</PrimaryButton>
           {!demoMode && <button onClick={onReset} className="mx-auto block text-[12px] text-muted-foreground underline">기록 초기화</button>}
         </div>
