@@ -1,7 +1,10 @@
-import type { RecoverySession, DailyLog, ConcernKey } from "./types";
-import { CONCERN_LABEL, EMOTION_LABEL, EXERCISE_LABEL, CONTEXT_LABEL } from "./types";
-import { currentStreak, hasCompletedChallenge } from "./streak";
-import { todayISO } from "./storage";
+import type { RecoverySession, DailyLog, ConcernKey, EmotionKey, ContextKey, LogField } from "./types.ts";
+import { CONCERN_LABEL, EMOTION_LABEL, EXERCISE_LABEL, CONTEXT_LABEL } from "./types.ts";
+import { completedChallengeLogs, currentStreak, hasCompletedChallenge, skippedDatesBetween } from "./streak.ts";
+import { todayISO } from "./storage.ts";
+import { LITERATURE, MEANINGFUL_ABSOLUTE, MEANINGFUL_RELATIVE, MIN_DAYS_PER_GROUP, MIN_MEAN_DIFF, REPEATED_MIN_NAP, REPEATED_MIN_WITH_DAYS } from "./evidence.ts";
+import { DEFAULT_PRIOR, estimateDifference, type Prior } from "./estimate.ts";
+import { periodPhase } from "./period.ts";
 
 export interface ConcernResult {
   key: ConcernKey;
@@ -11,10 +14,19 @@ export interface ConcernResult {
   delta: number;      // start - end (positive = improvement)
   improvement: number | null; // percentage, or null if start is 0
   series: number[];
+  /** 마지막 최대 2일 평균 — 하루치 점수의 들쭉날쭉함을 줄이기 위한 보조 끝점 */
+  endRecent: number;
+  /** 시작점 대비 변화가 "의미 있는 변화 폭"(약 2점 또는 약 30%) 이상인지 — 자가 기록 기준일 뿐 효과 판정이 아님 */
+  meaningful: boolean;
+}
+
+/** 리포트가 근거로 삼는 기록: 7일 챌린지를 마쳤다면 그 구간의 7일, 아니면 지금까지의 기록 전체. */
+export function reportLogs(session: RecoverySession): DailyLog[] {
+  return hasCompletedChallenge(session.dailyLogs) ? completedChallengeLogs(session.dailyLogs) : session.dailyLogs;
 }
 
 export function concernResults(session: RecoverySession): ConcernResult[] {
-  const logs = session.dailyLogs;
+  const logs = reportLogs(session);
   return session.selectedConcerns.map(key => {
     const series: number[] = [];
     for (const l of logs) {
@@ -25,7 +37,11 @@ export function concernResults(session: RecoverySession): ConcernResult[] {
     const end = series[series.length - 1] ?? start;
     const delta = start - end;
     const improvement = start > 0 ? Math.round((delta / start) * 100) : null;
-    return { key, label: CONCERN_LABEL[key], start, end, delta, improvement, series: [start, ...series] };
+    const tail = series.slice(-2);
+    const endRecent = tail.length ? tail.reduce((a, b) => a + b, 0) / tail.length : start;
+    const change = Math.abs(start - endRecent);
+    const meaningful = change >= MEANINGFUL_ABSOLUTE || (start > 0 && change / start >= MEANINGFUL_RELATIVE);
+    return { key, label: CONCERN_LABEL[key], start, end, delta, improvement, series: [start, ...series], endRecent, meaningful };
   });
 }
 
@@ -37,10 +53,12 @@ export function averageImprovement(session: RecoverySession): number | null {
 }
 
 export function ampouleUsageRate(session: RecoverySession): number {
-  const logs = session.dailyLogs;
+  const logs = reportLogs(session);
   if (!logs.length) return 0;
-  const used = logs.filter(l => l.ampouleUsed).length;
-  return Math.round((used / logs.length) * 100);
+  const answered = logs.filter(l => !isDefault(l, "ampoule"));
+  if (!answered.length) return 0;
+  const used = answered.filter(l => l.ampouleUsed).length;
+  return Math.round((used / answered.length) * 100);
 }
 
 export function completionRate(session: RecoverySession): number {
@@ -58,83 +76,183 @@ export function dailyDiscomfort(log: DailyLog, concerns: ConcernKey[]): number |
 export interface LifestyleFactor {
   key: string;
   label: string;
-  category: "sleep" | "emotion" | "exercise" | "context" | "environment";
+  category: "sleep" | "emotion" | "exercise" | "context" | "environment" | "weather";
   withDays: number;
   withoutDays: number;
   withAvg: number;
   withoutAvg: number;
   diff: number; // withAvg - withoutAvg; descriptive, not causal
+  /** 기록이 적을수록 0쪽으로 줄인 추정 차이와 95% 범위 — 기록이 쌓이면 범위가 좁아진다 */
+  shrunkDiff: number;
+  ciLow: number;
+  ciHigh: number;
+  /** 추정 범위가 0을 포함하지 않는가 */
+  clear: boolean;
+  /** 관측 차이의 표준오차 */
+  se: number;
+  /** 이 비교에 실제로 쓰인 날짜 — 리포트에서 근거를 그대로 보여주기 위함 */
+  withDates: string[];
+  withoutDates: string[];
+  /** 요인이 있던 날 중, 없던 날 평균보다 같은 방향(높거나 낮게)으로 기록된 날의 비율 (0~1) */
+  consistency: number;
+  /** 있던 날과 없던 날의 모든 쌍을 비교했을 때 있던 날 점수가 더 높았던 비율 (0~1, NAP 방식) */
+  nap: number;
+  /** 전날 요인과 다음 날 피부 점수를 잇는 비교인지 */
+  lagged: boolean;
+  /** 선행 연구가 같은 방향의 가설을 제시한 요인에만 붙는 한 줄 설명 */
+  literature?: string;
+  /** reference: 참고용 / repeated: 여러 날에 걸쳐 같은 방향이 반복됨 */
+  confidence: "reference" | "repeated";
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+function previousDate(date: string): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) - DAY_MS).toISOString().slice(0, 10);
+}
+
+/** NAP(Nonoverlap of All Pairs): 두 그룹의 모든 쌍 중 첫 그룹이 더 큰 비율. 같으면 0.5. 소수 일자 비교에 쓰이는 비모수 지표. */
+export function nonoverlapAllPairs(group: number[], other: number[]): number {
+  if (!group.length || !other.length) return 0.5;
+  let total = 0;
+  for (const x of group) for (const y of other) total += x > y ? 1 : x === y ? 0.5 : 0;
+  return total / (group.length * other.length);
+}
+
+/** 이 항목이 고객이 직접 입력·확인한 값이 아니라 기본값인지. 출처 정보가 없는 이전 기록은 직접 입력으로 본다. */
+export const isDefault = (log: DailyLog, field: LogField): boolean => log.sources?.[field] === "default";
+
+type FactorEntry = { log: DailyLog; prev?: DailyLog; score: number };
+
+/**
+ * 분석·예측용 기록: 이어받은 이전 주기 기록 + 이번에 쌓인 모든 기록. 날짜 중복은 최신 기록이 이긴다.
+ * 7일 챌린지 구간으로 자르지 않는다 — 재발 예측과 생리 주기 비교는 28일 이상의 연속 기록이 있어야 하기 때문이다.
+ * (리포트 화면은 앱이 이미 완주한 7일 구간만 넘겨서 보여준다.)
+ */
+export function analysisLogs(session: RecoverySession): DailyLog[] {
+  const byDate = new Map<string, DailyLog>();
+  for (const log of session.archivedLogs ?? []) byDate.set(log.date, log);
+  for (const log of session.dailyLogs) byDate.set(log.date, log);
+  return [...byDate.values()].sort((x, y) => x.date.localeCompare(y.date));
 }
 
 /** Exploratory within-person contrasts; neither significance nor causation is inferred. */
-export function lifestyleFactors(session: RecoverySession): LifestyleFactor[] {
+export function lifestyleFactors(
+  session: RecoverySession,
+  opts: { priors?: Record<string, Prior>; includeAll?: boolean } = {},
+): LifestyleFactor[] {
   const concerns = session.selectedConcerns;
-  const scored: { log: DailyLog; score: number }[] = session.dailyLogs
-    .map(log => ({ log, score: dailyDiscomfort(log, concerns) ?? NaN }))
+  const logsUsed = analysisLogs(session);
+  const byDate = new Map(logsUsed.map(l => [l.date, l]));
+  const scored: FactorEntry[] = logsUsed
+    .map(log => ({ log, prev: byDate.get(previousDate(log.date)), score: dailyDiscomfort(log, concerns) ?? NaN }))
     .filter(x => Number.isFinite(x.score));
 
   if (scored.length < 2) return [];
 
-  type Predicate = (l: DailyLog) => boolean;
-  const candidates: { key: string; label: string; category: LifestyleFactor["category"]; pred: Predicate }[] = [];
+  // 반환값: true=요인 있음, false=없음, null=이 비교에서 제외(예: 전날 기록 없음)
+  type Pred = (e: FactorEntry) => boolean | null;
+  const candidates: { key: string; label: string; category: LifestyleFactor["category"]; pred: Pred; lagged?: boolean; literature?: string }[] = [];
+  // 고객이 말하지 않아 기본값으로 채워진 항목은 비교에서 뺀다(null) — 입력하지 않은 값이 근거가 되지 않도록.
+  const same = (field: LogField, f: (l: DailyLog) => boolean): Pred => e => (isDefault(e.log, field) ? null : f(e.log));
+  const prevDay = (field: LogField, f: (l: DailyLog) => boolean): Pred => e => (e.prev && !isDefault(e.prev, field) ? f(e.prev) : null);
 
-  // Sleep
-  candidates.push({ key: "sleep_over7", label: "7시간 이상 수면", category: "sleep", pred: l => l.sleepMinutes >= 7 * 60 });
-  candidates.push({ key: "sleep_under6", label: "6시간 미만 수면", category: "sleep", pred: l => l.sleepMinutes < 6 * 60 });
+  // 생리 주기 — 시작일을 기록한 경우에만. "생리 전 7일"이 가장 근거가 있는 후보다.
+  if ((session.periodStarts ?? []).length >= 1) {
+    const phaseOf = (e: FactorEntry) => periodPhase(e.log.date, session.periodStarts);
+    candidates.push({ key: "cycle_pre", label: "생리 전 7일", category: "context", pred: e => { const p = phaseOf(e); return p === null ? null : p === "pre"; }, literature: LITERATURE.cycle });
+    candidates.push({ key: "cycle_menstrual", label: "생리 중", category: "context", pred: e => { const p = phaseOf(e); return p === null ? null : p === "menstrual"; } });
+  }
+
+  // Sleep — 같은 날 기록 + 전날 수면이 다음 날 피부에 이어지는지(장벽 회복은 수일에 걸쳐 측정됨)
+  candidates.push({ key: "sleep_over7", label: "7시간 이상 수면", category: "sleep", pred: same("sleep", l => l.sleepMinutes >= 7 * 60) });
+  candidates.push({ key: "sleep_under6", label: "6시간 미만 수면", category: "sleep", pred: same("sleep", l => l.sleepMinutes < 6 * 60), literature: LITERATURE.sleep });
+  candidates.push({ key: "sleep_under6_prev", label: "전날 6시간 미만 수면", category: "sleep", lagged: true, pred: prevDay("sleep", l => l.sleepMinutes < 6 * 60), literature: LITERATURE.sleep });
 
   // Emotions (each keyword)
   const emotionSet = new Set<string>();
-  session.dailyLogs.forEach(l => l.emotions.forEach(e => emotionSet.add(e)));
+  logsUsed.forEach(l => { if (!isDefault(l, "emotions")) l.emotions.forEach(e => emotionSet.add(e)); });
   emotionSet.forEach(e => {
     candidates.push({ key: `emotion_${e}`, label: EMOTION_LABEL[e as keyof typeof EMOTION_LABEL] ?? e, category: "emotion",
-      pred: l => l.emotions.includes(e as any) });
+      pred: same("emotions", l => l.emotions.includes(e as EmotionKey)) });
   });
-  // Tension emotion score high
-  candidates.push({ key: "tension_high", label: "긴장·부정 감정 높음", category: "emotion", pred: l => l.emotionStressScore >= 2 });
+  candidates.push({ key: "tension_high", label: "긴장·부정 감정 높음", category: "emotion", pred: same("emotions", l => l.emotionStressScore >= 2), literature: LITERATURE.stress });
+  candidates.push({ key: "tension_high_prev", label: "전날 긴장·부정 감정 높음", category: "emotion", lagged: true, pred: prevDay("emotions", l => l.emotionStressScore >= 2), literature: LITERATURE.stress });
 
   // Exercise type
   const exSet = new Set<string>();
-  session.dailyLogs.forEach(l => exSet.add(l.exerciseType));
+  logsUsed.forEach(l => { if (!isDefault(l, "exercise")) exSet.add(l.exerciseType); });
   exSet.forEach(e => {
     if (e === "none") return;
     candidates.push({ key: `ex_${e}`, label: EXERCISE_LABEL[e as keyof typeof EXERCISE_LABEL] ?? e, category: "exercise",
-      pred: l => l.exerciseType === e });
+      pred: same("exercise", l => l.exerciseType === e) });
   });
-  // Sweat high
-  candidates.push({ key: "sweat_high", label: "땀이 많은 운동", category: "exercise", pred: l => l.exerciseMeta.sweat === "high" });
-  // Indoor / outdoor
-  candidates.push({ key: "env_outdoor", label: "야외 운동", category: "environment", pred: l => l.exerciseMeta.environment === "outdoor" });
-  candidates.push({ key: "env_indoor", label: "실내 운동", category: "environment", pred: l => l.exerciseMeta.environment === "indoor" });
+  candidates.push({ key: "sweat_high", label: "땀이 많은 운동", category: "exercise", pred: same("exercise", l => l.exerciseMeta.sweat === "high") });
+  candidates.push({ key: "env_outdoor", label: "야외 운동", category: "environment", pred: same("exercise", l => l.exerciseMeta.environment === "outdoor") });
+  candidates.push({ key: "env_indoor", label: "실내 운동", category: "environment", pred: same("exercise", l => l.exerciseMeta.environment === "indoor") });
 
   // Context factors
   const ctxSet = new Set<string>();
-  session.dailyLogs.forEach(l => l.contextFactors.forEach(c => ctxSet.add(c)));
+  logsUsed.forEach(l => { if (!isDefault(l, "context")) l.contextFactors.forEach(c => ctxSet.add(c)); });
   ctxSet.forEach(c => {
     if (c === "none") return;
     candidates.push({ key: `ctx_${c}`, label: CONTEXT_LABEL[c as keyof typeof CONTEXT_LABEL] ?? c, category: "context",
-      pred: l => l.contextFactors.includes(c as any) });
+      pred: same("context", l => l.contextFactors.includes(c as ContextKey)) });
   });
+
+  // 날씨: 절대 기준 대신 "내 기록 기간의 중간값보다 높거나 낮은 날"로 가른다 — 계절·지역이 달라도 같은 방식으로 비교할 수 있다.
+  const wx = (pick: (w: NonNullable<DailyLog["weather"]>) => number | undefined) => logsUsed.map(l => (l.weather ? pick(l.weather) : undefined)).filter((v): v is number => typeof v === "number");
+  const median = (v: number[]) => { const a = [...v].sort((x, y) => x - y); return a.length ? (a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2) : NaN; };
+  const humidities = wx(w => w.humidity), uvs = wx(w => w.uv), temps = wx(w => w.temp), pms = wx(w => w.pm25);
+  const weatherCandidate = (key: string, label: string, values: number[], test: (w: NonNullable<DailyLog["weather"]>, m: number) => boolean | null) => {
+    if (values.length < 6) return;
+    const m = median(values);
+    candidates.push({ key, label, category: "weather", pred: e => (e.log.weather ? test(e.log.weather, m) : null) });
+  };
+  weatherCandidate("wx_dry", "평소보다 건조한 날", humidities, (w, m) => w.humidity < m);
+  weatherCandidate("wx_uv_high", "평소보다 자외선이 센 날", uvs, (w, m) => w.uv > m);
+  weatherCandidate("wx_cold", "평소보다 추운 날", temps, (w, m) => w.temp < m);
+  weatherCandidate("wx_pm_high", "평소보다 미세먼지가 많은 날", pms, (w, m) => (typeof w.pm25 === "number" ? w.pm25 > m : null));
 
   const factors: LifestyleFactor[] = [];
   for (const c of candidates) {
     const withIt: number[] = [];
     const withoutIt: number[] = [];
-    for (const s of scored) (c.pred(s.log) ? withIt : withoutIt).push(s.score);
-    if (withIt.length < 2 || withoutIt.length < 2) continue;
-    const withAvg = withIt.reduce((a, b) => a + b, 0) / withIt.length;
-    const withoutAvg = withoutIt.reduce((a, b) => a + b, 0) / withoutIt.length;
+    const withDates: string[] = [];
+    const withoutDates: string[] = [];
+    for (const e of scored) {
+      const hit = c.pred(e);
+      if (hit === null) continue;
+      if (hit) { withIt.push(e.score); withDates.push(e.log.date); }
+      else { withoutIt.push(e.score); withoutDates.push(e.log.date); }
+    }
+    if (withIt.length < MIN_DAYS_PER_GROUP || withoutIt.length < MIN_DAYS_PER_GROUP) continue;
+    const withAvg = withIt.reduce((x, y) => x + y, 0) / withIt.length;
+    const withoutAvg = withoutIt.reduce((x, y) => x + y, 0) / withoutIt.length;
     const diff = withAvg - withoutAvg;
-    if (Math.abs(diff) < 0.5) continue;
-    factors.push({ key: c.key, label: c.label, category: c.category, withDays: withIt.length, withoutDays: withoutIt.length, withAvg, withoutAvg, diff });
+    if (!opts.includeAll && Math.abs(diff) < MIN_MEAN_DIFF) continue;
+    const sameDirection = withIt.filter(v => (diff > 0 ? v > withoutAvg : v < withoutAvg)).length;
+    const consistency = sameDirection / withIt.length;
+    const nap = nonoverlapAllPairs(withIt, withoutIt);
+    const strength = diff > 0 ? nap : 1 - nap;
+    const confidence = withIt.length >= REPEATED_MIN_WITH_DAYS && strength >= REPEATED_MIN_NAP ? "repeated" : "reference";
+    const est = estimateDifference(withIt, withoutIt, opts.priors?.[c.key] ?? DEFAULT_PRIOR);
+    // 선행 연구 문구는 "있던 날 점수가 더 나쁘다"는 같은 방향일 때만 붙인다 — 반대 방향이면 문헌 근거처럼 보이지 않게 뺀다.
+    const literature = diff > 0 ? c.literature : undefined;
+    factors.push({ key: c.key, label: c.label, category: c.category, withDays: withIt.length, withoutDays: withoutIt.length, withAvg, withoutAvg, diff,
+      shrunkDiff: est.shrunkDiff, ciLow: est.ciLow, ciHigh: est.ciHigh, clear: est.clear, se: est.se,
+      withDates, withoutDates, consistency, nap, lagged: !!c.lagged, literature, confidence });
   }
-  // dedupe similar labels? Keep top by |diff|
-  factors.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
-  return factors.slice(0, 3);
+  // 추정 범위가 0을 벗어난 요인 → 여러 날 반복 → 평균 차이가 큰 순서로
+  factors.sort((x, y) =>
+    (Number(y.clear) - Number(x.clear)) ||
+    (Number(y.confidence === "repeated") - Number(x.confidence === "repeated")) ||
+    Math.abs(y.diff) - Math.abs(x.diff));
+  return opts.includeAll ? factors : factors.slice(0, 3);
 }
 
 export type RecoveryTypeKey =
   | "sleep_sensitive" | "emotion_reactive" | "travel_reactive" | "outdoor_reactive"
-  | "exercise_heat" | "hormonal" | "routine_stable" | "observation";
+  | "exercise_heat" | "hormonal" | "routine_stable" | "weather_reactive" | "observation";
 
 export function recoveryType(session: RecoverySession, topFactors: LifestyleFactor[]): { key: RecoveryTypeKey; label: string; desc: string } {
   const top = topFactors[0];
@@ -145,8 +263,9 @@ export function recoveryType(session: RecoverySession, topFactors: LifestyleFact
   if (top.category === "context") {
     if (top.key === "ctx_trip" || top.key === "ctx_longtravel") return { key: "travel_reactive", label: "이동·여행 동반형", desc };
     if (top.key === "ctx_outdoor") return { key: "outdoor_reactive", label: "야외활동 동반형", desc };
-    if (top.key === "ctx_menstrual") return { key: "hormonal", label: "주기 동반형", desc };
+    if (top.key === "ctx_menstrual" || top.key === "cycle_pre" || top.key === "cycle_menstrual") return { key: "hormonal", label: "주기 동반형", desc };
   }
+  if (top.category === "weather") return { key: "weather_reactive", label: "날씨 동반형", desc };
   if (top.category === "exercise" || top.category === "environment") return { key: "exercise_heat", label: "활동 동반형", desc };
   return { key: "routine_stable", label: "생활 리듬 동반형", desc };
 }
@@ -161,6 +280,7 @@ export function nextWeekSuggestion(topFactors: LifestyleFactor[]): string {
     if (top.key === "ctx_outdoor") return "야외활동이 있던 날과 아닌 날의 피부 점수를 다음 주에도 나란히 살펴보세요.";
     if (top.key === "ctx_alcohol") return "음주한 날과 다음 날의 피부 열감·붉은기 점수를 따로 기록해보세요.";
   }
+  if (top.category === "weather") return "다음 7일에도 같은 지역의 날씨와 피부 점수를 함께 기록해 이번 패턴이 반복되는지 확인해보세요.";
   if (top.category === "exercise" || top.category === "environment") return "운동한 날의 땀·열감과 피부 점수를 다음 주에도 함께 기록해보세요.";
   return `다음 7일에는 ${top.label}이(가) 있었던 날의 피부 점수를 다시 비교해보세요.`;
 }
@@ -168,7 +288,7 @@ export function nextWeekSuggestion(topFactors: LifestyleFactor[]): string {
 export function sleepMinutesFromTimes(bedtime: string, wakeTime: string): number {
   const [bh, bm] = bedtime.split(":").map(Number);
   const [wh, wm] = wakeTime.split(":").map(Number);
-  let start = bh * 60 + bm;
+  const start = bh * 60 + bm;
   let end = wh * 60 + wm;
   if (end <= start) end += 24 * 60;
   return end - start;
@@ -178,4 +298,45 @@ export function sleepCategoryFrom(minutes: number): import("./types").SleepCateg
   if (minutes < 6 * 60) return "fiveToSix";
   if (minutes < 7 * 60) return "sixToSeven";
   return "overSeven";
+}
+
+/** 리포트가 어떤 기록을 근거로 만들어졌는지 — 빠진 날도 숨기지 않고 보여준다. */
+export function reportEvidence(session: RecoverySession) {
+  const logs = reportLogs(session);
+  const dates = logs.map(l => l.date);
+  const scoredDays = logs.filter(l => dailyDiscomfort(l, session.selectedConcerns) !== null).length;
+  return {
+    loggedDays: logs.length,
+    scoredDays,
+    dates,
+    skippedDates: skippedDatesBetween(dates),
+    ampouleDays: logs.filter(l => l.ampouleUsed).length,
+  };
+}
+
+/** 오늘 기록 직후 보여줄, "내 기록이 리포트에 어떻게 쌓이고 있는지" 한두 줄. */
+export function dailyInsight(session: RecoverySession): { versusYesterday: string | null; evidence: string } {
+  const logs = reportLogs(session);
+  const today = logs[logs.length - 1];
+  const prev = logs[logs.length - 2];
+  let versusYesterday: string | null = null;
+  if (today && prev) {
+    const a = dailyDiscomfort(today, session.selectedConcerns);
+    const b = dailyDiscomfort(prev, session.selectedConcerns);
+    if (a !== null && b !== null) {
+      const d = Math.round((b - a) * 10) / 10;
+      versusYesterday = d > 0 ? `어제보다 불편 점수가 ${d}점 낮게 기록됐어요.`
+        : d < 0 ? `어제보다 불편 점수가 ${-d}점 높게 기록됐어요.` : "어제와 같은 점수로 기록됐어요.";
+    }
+  }
+  const n = logs.length;
+  const comparable = lifestyleFactors(session).length;
+  const evidence = n < 2
+    ? "내일 기록이 쌓이면 어제와 오늘을 비교할 수 있어요."
+    : n < 4
+      ? `${n}일치 기록이 쌓였어요. 생활 요인 비교는 같은 요인이 있던 날과 없던 날이 2일 이상씩 모이면 시작돼요.`
+      : comparable > 0
+        ? `${n}일치 기록에서 비교할 수 있는 생활 요인이 ${comparable}개 보이기 시작했어요.`
+        : `${n}일치 기록이 쌓였어요. 아직 뚜렷한 차이는 없어서, 내일 기록이 비교 기준을 더해줘요.`;
+  return { versusYesterday, evidence };
 }

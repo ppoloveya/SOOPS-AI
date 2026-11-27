@@ -64,14 +64,22 @@ export const EXERCISE_META: Record<ExerciseKey, ExerciseMeta> = {
 };
 
 export const CONTEXT_KEYS = [
-  "longtravel","trip","outdoor","alcohol","menstrual","mask","newcosmetic","latecleanse","none",
+  // 주요 지표 우선순위: 생리 → (수면·스트레스는 별도 항목) → 운동 → 여행 → 음주 → 세안
+  "menstrual","trip","longtravel","alcohol","skippedcleanse","latecleanse","outdoor","mask","newcosmetic","none",
 ] as const;
 export type ContextKey = typeof CONTEXT_KEYS[number];
 export const CONTEXT_LABEL: Record<ContextKey, string> = {
   longtravel:"장시간 이동", trip:"여행", outdoor:"야외활동", alcohol:"음주",
   menstrual:"생리 전·중", mask:"마스크 장시간", newcosmetic:"새로운 화장품",
-  latecleanse:"늦은 클렌징", none:"해당 없음",
+  latecleanse:"늦은 클렌징", skippedcleanse:"세안을 깜빡함", none:"해당 없음",
 };
+
+/** 그날의 날씨(사는 지역 기준). uv=자외선 지수 일최대, temp=평균기온(℃), humidity=평균습도(%), pm25=초미세먼지 일평균(㎍/㎥) */
+export interface WeatherDay { uv: number; temp: number; humidity: number; pm25?: number }
+
+/** 기록의 각 항목이 어디서 왔는지: user=고객이 직접 입력·확인, default=말하지 않아 기본값으로 채움(분석·예측에서 제외) */
+export type LogField = "sleep" | "emotions" | "exercise" | "context" | "ampoule";
+export type FieldSource = "user" | "default";
 
 export interface DailyLog {
   day: number;
@@ -91,6 +99,10 @@ export interface DailyLog {
   note?: string;
   /** 자유 입력에서 추출한 키워드 1개 — 감성 요약 전용 */
   noteKeyword?: string;
+  /** 사는 지역을 고른 경우에만 붙는 그날의 날씨 */
+  weather?: WeatherDay;
+  /** 항목별 출처. 없으면(이전 기록·일반 폼) 모두 직접 입력으로 본다 */
+  sources?: Partial<Record<LogField, FieldSource>>;
 }
 
 
@@ -109,6 +121,16 @@ export interface RecoverySession {
   wateredDates: string[];
   fertilizedDates: string[];
   completed: boolean;
+  /** 이전 7일 주기에서 이어받은 기록 — 분석에서만 쓰며 성장·챌린지 계산에는 섞지 않는다 */
+  archivedLogs?: DailyLog[];
+  /** 기록을 서버로 보내 개인 맞춤·고객 전체 학습에 쓰는 것에 별도로 동의했는지(선택, 기본 꺼짐) */
+  cloudConsent?: boolean;
+  /** 날씨 기록용으로 고른 시·도(선택). 정확한 위치는 쓰지 않는다 */
+  region?: string;
+  /** 생리 시작일(YYYY-MM-DD) 목록. 가장 민감한 정보라 이 기기에만 저장하고 서버로 보내지 않는다 */
+  periodStarts?: string[];
+  /** 선택 프로필(피부 타입·생리 항목·지역)을 마쳤는지. 처음 시작할 때는 묻지 않고 나중에 대시보드에서 묻는다 */
+  profileDone?: boolean;
 }
 
 export const STORAGE_KEY = "solvera:session:v1";

@@ -1,214 +1,39 @@
 # SOOPSAI
 
-## Project Overview
+지리산 자생 식물 앰플 **숲사이**와 함께하는 7일 피부 일기 웹앱입니다. 매일 피부 불편 점수·수면·감정·운동·생활 요인을 기록하면, 7일 뒤 **내가 직접 기록한 날짜들만을 근거로** 개인 리포트를 만들어 줍니다. 기록할수록 식물이 자라고, 7일을 채우면 찔레꽃이 핍니다.
 
-DailyMint is a mobile-first habit tracker application that enables users to build and maintain daily routines through streak tracking, progress visualization, and personal accountability. The product prioritizes simplicity, speed, and visual feedback over social features or premium gatekeeping. The target user is a self-motivated individual aged 18-45 seeking a distraction-free tool to monitor habit consistency and celebrate personal progress.
+- 서비스: https://soopsai.vercel.app
+- 화면: `/` 일기·리포트, `/plant` 공유 식물 카드, `/qr` QR 포스터
 
-## Core Functionality
+## 리포트가 만들어지는 방식
 
-- **Habit Creation & Management**: Users can create, edit, and delete habits with custom names, descriptions, and daily/weekly frequency options
+- 리포트의 모든 숫자는 사용자가 입력한 날짜별 기록에서만 계산합니다. 리포트 상단에 근거가 된 날짜와 쉬어간 날을 그대로 보여줍니다.
+- 생활 요인은 "그 요인이 있던 날 / 없던 날"의 평균 점수를 비교하고, 비교에 쓰인 날짜를 함께 표시합니다. 같은 방향이 여러 날 반복되면 "여러 날 반복"으로 구분합니다.
+- 자가 기록의 동반 패턴이며 원인이나 제품 효과를 판정하지 않습니다. 근거와 한계는 [docs/product-effect-methodology.md](docs/product-effect-methodology.md)를 보세요.
+- 기준값(2점·30% 변화 폭, 수면·스트레스 요인, 소표본 비교 등)의 논문 근거와 한계는 [docs/evidence-basis.md](docs/evidence-basis.md)에 있습니다.
+- 선택 동의한 고객의 기록을 서버에 모아 고객 전체 사전 분포를 학습하는 구조는 [docs/data-learning.md](docs/data-learning.md)입니다. **아직 어떤 서버에도 적용하지 않았습니다.**
+- 하루 쉬어가도 식물과 챌린지는 이어집니다. 쉬어가는 날 허용 횟수는 `src/lib/solvera/streak.ts`의 `GRACE_DAYS`(기본 1)로 조절하고, `0`이면 7일 연속 기록만 인정합니다.
 
-- **Daily Logging**: Quick one-tap check-in to mark habits as complete for the current day
+## 개발
 
-- **Streak Tracking**: Automatic streak counter that increments on consecutive completions and resets on missed days
-
-- **Progress Visualization**: Calendar heatmap showing completion history, streak badges, and visual momentum indicators
-
-- **Habit Statistics**: Simple metrics including current streak, longest streak, completion percentage, and total completions
-
-- **Reminders**: Optional push notifications at user-defined times to prompt habit completion
-
-- **Data Persistence**: Secure local and cloud storage of habit data with automatic sync
-
-## User Journey
-
-1. **Onboarding**: User signs up with email or social auth, completes a brief tutorial on core features, and is prompted to add their first habit
-
-2. **Habit Setup**: User creates 1-3 initial habits with names, descriptions, and reminder times
-
-3. **Daily Engagement**: User opens app, sees today's habits, taps to log completions, and views updated streak counter
-
-4. **Progress Review**: User navigates to calendar view to see weekly/monthly completion patterns and celebrate milestones
-
-5. **Habit Refinement**: User adjusts habits, adds new ones, or archives completed goals based on progress insights
-
-6. **Long-term Tracking**: User returns regularly to maintain streaks, view historical data, and build confidence through visual progress
-
-## Technical Requirements
-
-- **Platform**: iOS (primary), Android (secondary), responsive web app (future)
-
-- **Frontend**: React Native or Flutter for cross-platform mobile development
-
-- **Backend**: Node.js/Express or Python/Django REST API
-
-- **Database**: PostgreSQL for relational data, Redis for caching and real-time features
-
-- **Authentication**: JWT-based auth with email/password and OAuth 2.0 (Google, Apple)
-
-- **Storage**: Cloud storage (AWS S3) for backups; local SQLite for offline access
-
-- **Performance**: Target <2s load time, <500ms API response time, offline-first architecture
-
-- **Security**: End-to-end encryption for sensitive data, GDPR/CCPA compliance, regular security audits
-
-## API Integrations
-
-- **Push Notification Service**: Firebase Cloud Messaging (FCM) for reminders and motivational notifications
-
-- **Analytics**: Mixpanel or Amplitude for user behavior tracking and feature usage insights
-
-- **Authentication**: Auth0 or Firebase Auth for secure user management
-
-- **Cloud Sync**: Firebase Realtime Database or custom API for seamless cross-device synchronization
-
-- **Calendar Integration**: Optional iCal export for syncing with native calendar apps
-
-- **Wearable Integration**: Future integration with Apple Health and Google Fit for fitness-related habits
-
-## Real-Time Features
-
-- **Live Streak Updates**: Instant streak counter refresh upon habit completion
-
-- **Notification Sync**: Real-time push notifications across all user devices
-
-- **Cross-Device Sync**: Automatic habit data synchronization when user logs in on multiple devices
-
-- **Motivational Alerts**: Real-time milestone notifications (e.g., "7-day streak achieved!")
-
-- **Conflict Resolution**: Automatic handling of simultaneous edits across devices with last-write-wins strategy
-
-## Implementation Details
-
-- **Architecture**: Modular, component-based frontend with clear separation of concerns; microservices backend for scalability
-
-- **State Management**: Redux or Context API for frontend state; server-side session management for backend
-
-- **Testing**: Unit tests (Jest/Vitest), integration tests (Supertest), E2E tests (Cypress/Detox)
-
-- **CI/CD**: GitHub Actions for automated testing, linting, and deployment to staging/production
-
-- **Monitoring**: Sentry for error tracking, DataDog for performance monitoring, custom dashboards for key metrics
-
-- **Documentation**: API documentation (Swagger/OpenAPI), component storybook, developer onboarding guide
-
-## MVP Features
-
-- User authentication (email/password signup and login)
-
-- Create, edit, and delete habits with custom names and descriptions
-
-- Daily habit logging with one-tap check-in
-
-- Automatic streak counter and reset logic
-
-- Calendar view showing completion history (7-day and 30-day views)
-
-- Basic statistics dashboard (current streak, longest streak, completion %)
-
-- Optional push notifications at user-defined times
-
-- Local data persistence with cloud backup
-
-- Simple onboarding tutorial
-
-- Dark mode support
-
-## Future Features
-
-- **Advanced Analytics**: Habit correlation analysis, optimal reminder times, completion trend predictions
-
-- **Social Accountability**: Optional friend connections, shared habit challenges, leaderboards (opt-in)
-
-- **AI Recommendations**: Machine learning-powered habit suggestions based on user behavior and goals
-
-- **Habit Templates**: Pre-built habit templates for common goals (fitness, learning, wellness)
-
-- **Integrations**: Apple Health, Google Fit, Spotify, Todoist, Notion
-
-- **Habit Stacking**: UI for linking related habits and building compound routines
-
-- **Export & Reporting**: PDF reports, data export, annual summaries
-
-- **Gamification**: Badges, achievements, milestone celebrations (non-intrusive)
-
-- **Web Dashboard**: Full-featured web app for detailed analytics and habit management
-
-- **Offline Mode**: Full offline functionality with sync when connection restored
-
-## User Experience Guidelines
-
-- **Simplicity First**: Minimize cognitive load; every screen should have a single primary action
-
-- **Visual Feedback**: Immediate visual confirmation of habit completion (animations, color changes, streak updates)
-
-- **Accessibility**: WCAG 2.1 AA compliance, support for screen readers, high-contrast mode
-
-- **Performance**: Instant app launch, <500ms response to user actions, smooth 60fps animations
-
-- **Consistency**: Unified design language, consistent iconography, predictable navigation patterns
-
-- **Onboarding**: Progressive disclosure of features; advanced options hidden until user is ready
-
-- **Error Handling**: Clear, friendly error messages with actionable solutions; never show technical jargon
-
-- **Mobile-First**: Thumb-friendly touch targets (minimum 44x44pt), optimized for one-handed use
-
-- **Personalization**: Allow users to customize habit colors, reminder times, and notification preferences
-
-## Code Quality Standards
-
-- **Language**: TypeScript for type safety and developer experience
-
-- **Linting**: ESLint with Airbnb config, Prettier for code formatting
-
-- **Testing Coverage**: Minimum 80% code coverage for critical paths; 100% for authentication and data persistence
-
-- **Code Reviews**: Mandatory peer review before merge; automated checks for linting, security, and test coverage
-
-- **Documentation**: JSDoc comments for all public functions, README for each module, architecture decision records (ADRs)
-
-- **Git Workflow**: Feature branches, conventional commits, semantic versioning
-
-- **Security**: OWASP Top 10 compliance, regular dependency updates, automated vulnerability scanning (Snyk)
-
-- **Performance**: Lighthouse score >90, bundle size <500KB (gzipped), lazy loading for non-critical features
-
-## Deliverable Format
-
-- **Frontend**: React Native app (iOS/Android) with TypeScript, Redux state management, and responsive UI components
-
-- **Backend**: RESTful API with OpenAPI/Swagger documentation, comprehensive error handling, and rate limiting
-
-- **Database**: PostgreSQL schema with migration scripts, indexed queries for performance
-
-- **Deployment**: Docker containers, Kubernetes orchestration (optional), CI/CD pipeline with automated testing
-
-- **Documentation**: API docs, component storybook, deployment guide, user manual, developer onboarding guide
-
-- **Monitoring**: Error tracking dashboard, performance metrics, user analytics dashboard
-
-- **Release**: App Store and Google Play releases with version management, beta testing program, release notes
-
-This project was built with [Lovable](https://lovable.dev).
-
-**Live app**: https://soopsai.vercel.app
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/d2f36cce-6bbb-4b27-8039-b12aa545a565).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
-```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+```bash
+npm ci
+cp .env.example .env   # Supabase 값 입력
+npm run dev            # http://localhost:8080
 ```
+
+| 명령 | 설명 |
+| --- | --- |
+| `npm run typecheck` | 타입 검사 |
+| `npm run lint` | ESLint |
+| `npm test` | 기록·성장·공유 로직 단위 테스트 |
+| `npm run build` | 프로덕션 빌드 |
+
+기술 스택: TanStack Start(React 19) · Vite 7 · Tailwind CSS 4 · Supabase · shadcn/ui.
+
+## 배포
+
+- **Vercel**(운영): `VERCEL=1` 환경에서 빌드되며 nitro로 번들됩니다.
+- **Cloudflare**(대안): 그 외 `vite build`는 `wrangler.jsonc` 설정의 Cloudflare Workers용으로 빌드됩니다.
+
+패키지 매니저는 npm입니다(`package-lock.json`).

@@ -1,14 +1,23 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Check, Pencil, Share2, X } from "lucide-react";
 import { growthProgress } from "@/lib/solvera/growth";
 import { todayISO } from "@/lib/solvera/storage";
 import { createPlantShareUrl, MAX_PLANT_NAME_LENGTH, normalizePlantName } from "@/lib/solvera/plantShare";
 import type { RecoverySession } from "@/lib/solvera/types";
+import { fetchGiftCount, getShareToken } from "@/lib/solvera/gift";
+import { trackEvent } from "@/lib/solvera/analytics";
 
 export function PlantIdentity({ session, onNameChange }: { session: RecoverySession; onNameChange: (name: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(session.plantName);
   const [status, setStatus] = useState("");
+  const [gifts, setGifts] = useState({ water: 0, fertilizer: 0 });
+
+  // 이미 공유한 적이 있는 기기에서만 받은 응원을 확인한다(토큰은 처음 공유할 때 만들어진다).
+  useEffect(() => {
+    const token = localStorage.getItem("soopsai:share-token");
+    if (token) fetchGiftCount(token).then(setGifts);
+  }, []);
   const isLocal = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
   const saveName = (event: FormEvent) => {
@@ -22,7 +31,8 @@ export function PlantIdentity({ session, onNameChange }: { session: RecoverySess
 
   const share = async () => {
     const { day, xp } = growthProgress(session, todayISO());
-    const url = createPlantShareUrl(window.location.origin, { name: session.plantName, day, xp });
+    trackEvent("share_click");
+    const url = createPlantShareUrl(window.location.origin, { name: session.plantName, day, xp, token: getShareToken() });
     const text = `${session.plantName} · ${day}일차 · ${xp} XP`;
     try {
       if (isLocal) {
@@ -62,6 +72,7 @@ export function PlantIdentity({ session, onNameChange }: { session: RecoverySess
       <button type="button" onClick={share} className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/45 px-4 py-2 text-[12px] font-semibold text-forest" title="식물 이름·성장일·경험치만 공유">
         <Share2 size={15} aria-hidden="true" />{isLocal ? "공유 미리보기" : "친구에게 공유"}
       </button>
+      {gifts.water + gifts.fertilizer > 0 && <div className="mt-2 text-[12px] text-forest">친구 응원 · 물 {gifts.water} · 거름 {gifts.fertilizer}</div>}
       <div className="mt-2 min-h-4 text-[11px] text-charcoal/60" role="status" aria-live="polite">{status}</div>
     </div>
   );

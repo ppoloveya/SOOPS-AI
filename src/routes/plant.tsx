@@ -1,9 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import { DeviceFrame } from "@/components/solvera/DeviceFrame";
 import { BloomFlower } from "@/components/solvera/BloomFlower";
 import { GROWTH_STAGES, MAX_GROWTH_XP } from "@/lib/solvera/growth";
 import { parsePlantSnapshot } from "@/lib/solvera/plantShare";
+import { GIFT_LABEL, giftSentKey, sendGift, type GiftKind } from "@/lib/solvera/gift";
+import { trackEvent } from "@/lib/solvera/analytics";
+import { todayISO } from "@/lib/solvera/storage";
 
 export const Route = createFileRoute("/plant")({
   validateSearch: search => parsePlantSnapshot(search) ?? { name: "", day: -1, xp: 0 },
@@ -19,6 +23,32 @@ export const Route = createFileRoute("/plant")({
 function Page() {
   const search = Route.useSearch();
   const snapshot = search.day >= 0 ? search : null;
+  const token = snapshot && "token" in snapshot ? snapshot.token : undefined;
+  const [sent, setSent] = useState<Partial<Record<GiftKind, boolean>>>({});
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => { if (snapshot) trackEvent("share_link_open"); }, [snapshot?.name]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!token) return;
+    const today = todayISO();
+    setSent({
+      water: !!localStorage.getItem(giftSentKey(token, "water", today)),
+      fertilizer: !!localStorage.getItem(giftSentKey(token, "fertilizer", today)),
+    });
+  }, [token]);
+
+  const give = async (kind: GiftKind) => {
+    if (!token || sent[kind]) return;
+    const ok = await sendGift(token, kind);
+    if (ok) {
+      localStorage.setItem(giftSentKey(token, kind, todayISO()), "1");
+      setSent(prev => ({ ...prev, [kind]: true }));
+      setNotice(`${GIFT_LABEL[kind]}을(를) 보냈어요. 친구에게 응원으로 전해져요.`);
+      trackEvent("gift_sent");
+    } else {
+      setNotice("지금은 보낼 수 없어요. 잠시 뒤 다시 시도해주세요.");
+    }
+  };
   return (
     <DeviceFrame>
       <main className="flex min-h-full flex-col px-5 pb-10 pt-9 text-center text-charcoal">
@@ -38,7 +68,18 @@ function Page() {
               <div className="h-full rounded-full bg-[#6d9f76]" style={{ width: `${snapshot.xp / MAX_GROWTH_XP * 100}%` }} />
             </div>
           </div>
-          <p className="mt-7 text-[11px] text-charcoal/55">공유 당시의 모습</p>
+          {token && (
+            <div className="mx-auto mt-6 flex w-full max-w-[320px] gap-2">
+              {(["water", "fertilizer"] as GiftKind[]).map(kind => (
+                <button key={kind} type="button" onClick={() => give(kind)} disabled={!!sent[kind]}
+                  className="flex-1 rounded-full border border-white/80 bg-white/50 px-3 py-2.5 text-[13px] font-semibold text-forest disabled:opacity-50">
+                  {sent[kind] ? `오늘 ${GIFT_LABEL[kind]} 보냄` : `${GIFT_LABEL[kind]} 주기`}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="mt-2 min-h-4 text-[11px] text-forest" role="status" aria-live="polite">{notice}</div>
+          <p className="mt-5 text-[11px] text-charcoal/55">공유 당시의 모습 · 응원은 경험치에 더해지지 않아요</p>
         </> : <>
           <h1 className="mt-20 font-serif text-[25px] text-plum">식물 정보를 찾을 수 없어요</h1>
           <p className="mt-3 text-[13px] text-charcoal/65">공유 링크를 다시 확인해주세요.</p>

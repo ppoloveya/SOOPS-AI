@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { BloomFlower } from "./BloomFlower";
 import {
-  EMOTION_SCORE, EXERCISE_META,
+  EMOTION_SCORE, EXERCISE_META, CONTEXT_KEYS, EXERCISE_KEYS,
+  type LogField, type FieldSource,
   type ConcernKey, type ContextKey, type DailyLog, type EmotionKey, type ExerciseKey,
   type RecoverySession, type SleepCategory,
 } from "@/lib/solvera/types";
 import { todayISO } from "@/lib/solvera/storage";
 import { currentStreak, hasCompletedChallenge } from "@/lib/solvera/streak";
 import { analyzeNote } from "@/lib/solvera/keyword";
+import { trackEvent } from "@/lib/solvera/analytics";
+import { sleepCategoryFrom } from "@/lib/solvera/analysis";
 
 type Msg = { id: number; role: "bot" | "user"; text: string; subtle?: boolean };
 type Option = { value: string; label: string; reply: string; score: number };
@@ -16,7 +19,11 @@ type LifeDraft = {
   exercise: ExerciseKey;
   context: ContextKey[];
   sleep: SleepCategory;
+  /** 문장에서 "6시간 잤어"처럼 정확한 시간을 읽은 경우의 분 */
+  sleepMinutes?: number;
   ampoule: boolean;
+  /** 문장에서 실제로 읽어낸 항목 — false면 말하지 않은 것이라 기본값이 들어간 상태 */
+  found: Record<LogField, boolean>;
 };
 
 const concernLabel: Record<ConcernKey, string> = {
@@ -67,6 +74,7 @@ const contextLabel: Record<ContextKey, string> = {
   outdoor: "야외 활동",
   alcohol: "음주",
   menstrual: "생리 전후",
+  skippedcleanse: "세안을 깜빡함",
   mask: "마스크 오래 착용",
   newcosmetic: "새 화장품",
   latecleanse: "늦은 클렌징",
@@ -92,6 +100,11 @@ const bloomSub: Record<number, string> = {
 
 const normalize = (text: string) => text.toLowerCase().replace(/\s/g, "").replace(/[.,!?~]/g, "");
 const includesAny = (text: string, words: string[]) => words.some(word => text.includes(normalize(word)));
+/** includesAny와 같지만 바로 뒤에 부정("안", "없", "못")이 붙은 말은 제외한다. */
+const hasWord = (text: string, words: string[]) => words.some(word => {
+  const w = normalize(word);
+  return text.includes(w) && !new RegExp(`${w}(?:는|은|이|가|도|을|를)?(?:안|없|못|별로안|전혀)`).test(text);
+});
 
 const concernOptions: Record<ConcernKey, Option[]> = {
   trouble: [
@@ -189,7 +202,7 @@ function parseLife(text: string, showMenstrual: boolean): LifeDraft {
   const t = normalize(text);
   const emotions: EmotionKey[] = [];
   const addEmotion = (key: EmotionKey, words: string[]) => {
-    if (includesAny(t, words) && emotions.length < 2) emotions.push(key);
+    if (hasWord(t, words) && emotions.length < 2) emotions.push(key);
   };
   addEmotion("tired", ["피곤", "졸려", "지침", "힘들"]);
   addEmotion("stressed", ["스트레스", "빡세", "바빴", "압박"]);
@@ -212,7 +225,7 @@ function parseLife(text: string, showMenstrual: boolean): LifeDraft {
 
   const context: ContextKey[] = [];
   const addContext = (key: ContextKey, words: string[]) => {
-    if (includesAny(t, words)) context.push(key);
+    if (hasWord(t, words)) context.push(key);
   };
   addContext("longtravel", ["오래이동", "장거리", "이동많"]);
   addContext("trip", ["여행"]);
@@ -222,20 +235,38 @@ function parseLife(text: string, showMenstrual: boolean): LifeDraft {
   addContext("mask", ["마스크"]);
   addContext("newcosmetic", ["새화장품", "처음쓴", "새로쓴"]);
   addContext("latecleanse", ["늦게씻", "클렌징늦", "늦은클렌징"]);
+  addContext("skippedcleanse", ["세안안", "세수안", "클렌징안", "세안깜빡", "세안까먹", "안씻고잤", "안씻고"]);
 
   let sleep: SleepCategory = "sixToSeven";
-  if (includesAny(t, ["푹", "푹잠", "잘잤", "많이잤"])) sleep = "overSeven";
-  else if (includesAny(t, ["거의못", "못잤", "잠못"])) sleep = "under5";
-  else if (includesAny(t, ["부족", "조금잤", "설쳤"])) sleep = "fiveToSix";
+  let sleepFound = false;
+  let sleepMinutes: number | undefined;
+  const hours = t.match(/(\d{1,2}(?:\.\d)?)시간/);
+  if (hours && includesAny(t, ["잠", "잤", "수면"]) && Number(hours[1]) > 0 && Number(hours[1]) <= 16) {
+    sleepMinutes = Math.round(Number(hours[1]) * 60);
+    sleep = sleepCategoryFrom(sleepMinutes);
+    sleepFound = true;
+  } else if (includesAny(t, ["푹", "푹잠", "잘잤", "많이잤"])) { sleep = "overSeven"; sleepFound = true; }
+  else if (includesAny(t, ["거의못", "못잤", "잠못"])) { sleep = "under5"; sleepFound = true; }
+  else if (includesAny(t, ["부족", "조금잤", "설쳤"])) { sleep = "fiveToSix"; sleepFound = true; }
 
   const ampoule = includesAny(t, ["숲사이", "앰플"]) && !includesAny(t, ["안썼", "못썼", "안발랐", "미사용", "사용안했", "사용하지않", "안썼어요"]);
 
+  const exerciseFound = exercise !== "none" || includesAny(t, ["운동안", "운동못", "쉬었어", "쉬었다", "움직이지않"]);
+  const contextFound = context.length > 0 || includesAny(t, ["특별없", "별일없", "평소같", "평소처럼"]);
   return {
     emotions: emotions.length ? emotions : ["normal"],
     exercise,
     context: context.length ? [...new Set(context)] : ["none"],
     sleep,
+    sleepMinutes,
     ampoule,
+    found: {
+      sleep: sleepFound,
+      emotions: emotions.length > 0,
+      exercise: exerciseFound,
+      context: contextFound,
+      ampoule: includesAny(t, ["숲사이", "앰플"]),
+    },
   };
 }
 
@@ -254,7 +285,7 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
   onCancel: () => void;
 }) {
   const day = Math.min(currentStreak(session.dailyLogs, todayISO()) + 1, 7);
-  const [phase, setPhase] = useState<"life" | "concern" | "note" | "saving" | "done">("life");
+  const [phase, setPhase] = useState<"life" | "confirm" | "concern" | "note" | "saving" | "done">("life");
   const [msgs, setMsgs] = useState<Msg[]>(() => [
     { id: 1, role: "bot", text: `오늘의 작은 변화를 같이 남겨볼게요.` },
     {
@@ -267,6 +298,9 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
   const [text, setText] = useState("");
   const [recording, setRecording] = useState(false);
   const [life, setLife] = useState<LifeDraft | null>(null);
+  const [confirmDraft, setConfirmDraft] = useState<LifeDraft | null>(null);
+  const [touched, setTouched] = useState<LogField[]>([]);
+  const [lifeSources, setLifeSources] = useState<Partial<Record<LogField, FieldSource>>>({});
   const [concernIndex, setConcernIndex] = useState(0);
   const [concernScores, setConcernScores] = useState<Partial<Record<ConcernKey, number>>>({});
   const idRef = useRef(2);
@@ -307,12 +341,35 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
     setText("");
     const parsed = parseLife(value, session.showMenstrualFactor);
     setLife(parsed);
+    setConfirmDraft(parsed);
+    setTouched([]);
+    const missing = (Object.keys(parsed.found) as LogField[]).filter(f => !parsed.found[f]).length;
     push(
       "bot",
-      `이렇게 이해했어요: ${parsed.emotions.map(e => emotionLabel[e]).join(", ")} / ${exerciseLabel[parsed.exercise]} / ${parsed.context.map(c => contextLabel[c]).join(", ")} / ${sleepMeta[parsed.sleep].label} / 숲사이 앰플 ${parsed.ampoule ? "사용" : "미사용"}`,
+      missing === 5
+        ? "문장에서 읽어낸 항목이 없었어요. 아래에서 해당하는 것만 눌러주세요. 안 누른 항목은 분석에 쓰지 않고 비워둘게요."
+        : "이렇게 이해했어요. 틀린 곳만 눌러서 바꿔주세요. 말씀 안 하신 항목은 안 눌러도 돼요. 그 항목은 분석에 쓰지 않고 비워둘게요.",
       true,
     );
-    push("bot", "오늘 흐름이 조금 바빴겠어요. 피부 변화랑 같이 보면 패턴이 더 잘 보일 거예요.");
+    setPhase("confirm");
+  };
+
+  const changeDraft = (field: LogField, patch: Partial<LifeDraft>) => {
+    setConfirmDraft(d => (d ? { ...d, ...patch } : d));
+    setTouched(t => (t.includes(field) ? t : [...t, field]));
+  };
+
+  const confirmLife = () => {
+    if (!confirmDraft || !life) return;
+    const fields = Object.keys(life.found) as LogField[];
+    const sources: Partial<Record<LogField, FieldSource>> = {};
+    for (const f of fields) sources[f] = life.found[f] || touched.includes(f) ? "user" : "default";
+    const corrected = fields.filter(f => life.found[f] && JSON.stringify(life[f]) !== JSON.stringify(confirmDraft[f])).length;
+    trackEvent(corrected > 0 ? "chat_parse_corrected" : "chat_parse_confirmed");
+    setLife(confirmDraft);
+    setLifeSources(sources);
+    push("user", "맞아요");
+    push("bot", "좋아요. 피부 변화랑 같이 보면 패턴이 더 잘 보일 거예요.");
     askConcern(0);
   };
 
@@ -348,6 +405,10 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
     }
     const parsedLife = life ?? parseLife("", session.showMenstrualFactor);
     const sleep = sleepMeta[parsedLife.sleep];
+    const exactMinutes = parsedLife.sleepMinutes;
+    const wakeMinutes = exactMinutes !== undefined ? (23 * 60 + exactMinutes) % 1440 : null;
+    const wakeLabel = wakeMinutes !== null ? `${String(Math.floor(wakeMinutes / 60)).padStart(2, "0")}:${String(wakeMinutes % 60).padStart(2, "0")}` : sleep.wakeTime;
+    const allDefault: Partial<Record<LogField, FieldSource>> = { sleep: "default", emotions: "default", exercise: "default", context: "default", ampoule: "default" };
     const { empathy, keyword } = analyzeNote(note);
     const scores: Partial<Record<ConcernKey, number>> = {};
     session.selectedConcerns.forEach(k => {
@@ -359,9 +420,9 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
       date,
       concernScores: scores,
       ampouleUsed: parsedLife.ampoule,
-      bedtime: sleep.bedtime,
-      wakeTime: sleep.wakeTime,
-      sleepMinutes: sleep.minutes,
+      bedtime: exactMinutes !== undefined ? "23:00" : sleep.bedtime,
+      wakeTime: wakeLabel,
+      sleepMinutes: exactMinutes ?? sleep.minutes,
       sleepCategory: parsedLife.sleep,
       emotions: parsedLife.emotions,
       emotionStressScore: parsedLife.emotions.reduce((sum, e) => sum + EMOTION_SCORE[e], 0),
@@ -370,6 +431,7 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
       contextFactors: parsedLife.context,
       note,
       noteKeyword: keyword,
+      sources: life ? lifeSources : allDefault,
     };
 
     const newLogs = [...session.dailyLogs, log];
@@ -484,7 +546,7 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
 
       {phase !== "done" && (
         <div className={`shrink-0 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] space-y-2 bg-white/10 backdrop-blur-md ${phase === "life" ? "pt-3" : "pt-2"}`}>
-          <div className="flex items-center gap-2">
+          {phase !== "confirm" && <div className="flex items-center gap-2">
             <button
               onClick={toggleMic}
               aria-label={recording ? "음성 입력 종료" : "음성 입력 시작"}
@@ -516,7 +578,10 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 20l16-8L4 4l3 8-3 8z" fill="currentColor" /></svg>
             </button>
-          </div>
+          </div>}
+          {phase === "confirm" && confirmDraft && life && (
+            <ConfirmLife draft={confirmDraft} found={life.found} touched={touched} onChange={changeDraft} onConfirm={confirmLife} />
+          )}
           {phase === "life" && (
             <div className="space-y-2">
               {lifeGroups.map(group => (
@@ -552,6 +617,70 @@ export function ChatDailyFlow({ session, setSession, onDone, onCancel }: {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+const EMOTION_CHOICES: EmotionKey[] = ["tired", "stressed", "sensitive", "anxious", "irritated", "calm", "fresh", "normal"];
+const SLEEP_CHOICES: SleepCategory[] = ["under5", "fiveToSix", "sixToSeven", "overSeven"];
+
+/** 문장에서 읽은 값을 눌러서 확인·수정하는 카드. 말하지 않은 항목은 "비워둠"으로 표시된다. */
+function ConfirmLife({ draft, found, touched, onChange, onConfirm }: {
+  draft: LifeDraft; found: Record<LogField, boolean>; touched: LogField[];
+  onChange: (field: LogField, patch: Partial<LifeDraft>) => void; onConfirm: () => void;
+}) {
+  const chip = (active: boolean) => `min-h-[32px] px-2.5 rounded-full border text-[11.5px] font-semibold transition active:scale-[0.98] whitespace-nowrap ${active ? "glass-lucky text-plum" : "glass-pill text-plum/75"}`;
+  const state = (f: LogField) => (found[f] || touched.includes(f) ? "" : " · 비워둠");
+  const toggleEmotion = (e: EmotionKey) => {
+    const has = draft.emotions.includes(e);
+    const base = draft.emotions.filter(x => x !== "normal" || e === "normal");
+    const next = has ? base.filter(x => x !== e) : [...base.filter(x => x !== "normal"), e].slice(-2);
+    onChange("emotions", { emotions: next.length ? next : ["normal"] });
+  };
+  const toggleContext = (c: ContextKey) => {
+    if (c === "none") return onChange("context", { context: ["none"] });
+    const base = draft.context.filter(x => x !== "none");
+    onChange("context", { context: base.includes(c) ? (base.filter(x => x !== c).length ? base.filter(x => x !== c) : ["none"]) : [...base, c] });
+  };
+  const confirmedEmotions = found.emotions || touched.includes("emotions");
+  const confirmedContext = found.context || touched.includes("context");
+  const confirmedExercise = found.exercise || touched.includes("exercise");
+  const confirmedSleep = found.sleep || touched.includes("sleep");
+  const confirmedAmpoule = found.ampoule || touched.includes("ampoule");
+  return (
+    <div className="max-h-[46dvh] space-y-2.5 overflow-y-auto pb-1" aria-label="읽어낸 내용 확인">
+      <div className="flex items-start gap-2">
+        <div className="w-[52px] shrink-0 pt-2 text-[10px] font-semibold text-plum/55">수면{state("sleep")}</div>
+        <div className="flex flex-1 flex-wrap gap-1.5">
+          {SLEEP_CHOICES.map(k => <button key={k} className={chip(confirmedSleep && draft.sleep === k)} onClick={() => onChange("sleep", { sleep: k, sleepMinutes: undefined })}>{sleepMeta[k].label}</button>)}
+        </div>
+      </div>
+      <div className="flex items-start gap-2">
+        <div className="w-[52px] shrink-0 pt-2 text-[10px] font-semibold text-plum/55">기분{state("emotions")}</div>
+        <div className="flex flex-1 flex-wrap gap-1.5">
+          {EMOTION_CHOICES.map(k => <button key={k} className={chip(confirmedEmotions && draft.emotions.includes(k))} onClick={() => toggleEmotion(k)}>{emotionLabel[k]}</button>)}
+        </div>
+      </div>
+      <div className="flex items-start gap-2">
+        <div className="w-[52px] shrink-0 pt-2 text-[10px] font-semibold text-plum/55">운동{state("exercise")}</div>
+        <div className="flex flex-1 flex-wrap gap-1.5">
+          {EXERCISE_KEYS.map(k => <button key={k} className={chip(confirmedExercise && draft.exercise === k)} onClick={() => onChange("exercise", { exercise: k })}>{exerciseLabel[k]}</button>)}
+        </div>
+      </div>
+      <div className="flex items-start gap-2">
+        <div className="w-[52px] shrink-0 pt-2 text-[10px] font-semibold text-plum/55">생활{state("context")}</div>
+        <div className="flex flex-1 flex-wrap gap-1.5">
+          {CONTEXT_KEYS.map(k => <button key={k} className={chip(confirmedContext && draft.context.includes(k))} onClick={() => toggleContext(k)}>{contextLabel[k]}</button>)}
+        </div>
+      </div>
+      <div className="flex items-start gap-2">
+        <div className="w-[52px] shrink-0 pt-2 text-[10px] font-semibold text-plum/55">앰플{state("ampoule")}</div>
+        <div className="flex flex-1 flex-wrap gap-1.5">
+          <button className={chip(confirmedAmpoule && draft.ampoule)} onClick={() => onChange("ampoule", { ampoule: true })}>숲사이 사용</button>
+          <button className={chip(confirmedAmpoule && !draft.ampoule)} onClick={() => onChange("ampoule", { ampoule: false })}>미사용</button>
+        </div>
+      </div>
+      <button onClick={onConfirm} className="glass-lucky min-h-[46px] w-full rounded-full text-[14px] font-bold text-plum">맞아요, 다음으로</button>
     </div>
   );
 }
