@@ -17,7 +17,8 @@ import {
 import { loadSession, saveSession, clearSession, todayISO } from "@/lib/solvera/storage";
 import { startNextCycle } from "@/lib/solvera/cycle";
 import { trackEvent } from "@/lib/solvera/analytics";
-import { QUICK_LEVELS, QUICK_LEVEL_TO_SCORE, addQuickCheck, loadQuick, quickStreak, saveQuick, type QuickCheck, type QuickLevel } from "@/lib/solvera/quick";
+import { QUICK_LEVELS, QUICK_LEVEL_TO_SCORE, addQuickCheck, loadQuick, loadQuickPlant, quickStreak, saveQuick, saveQuickPlant, type QuickCheck, type QuickLevel, type QuickPlant } from "@/lib/solvera/quick";
+import { MAX_PLANT_NAME_LENGTH } from "@/lib/solvera/plantShare";
 import { REGIONS, attachWeatherToSession, fetchDailyWeather, isRegionKey, pastDaysNeeded } from "@/lib/solvera/weather";
 import { fetchPopulationPriors, grantConsent, syncLogs, withdrawConsent } from "@/lib/solvera/cloud";
 import type { Prior } from "@/lib/solvera/estimate";
@@ -29,7 +30,7 @@ import { topKeyword } from "@/lib/solvera/keyword";
 import {
   concernResults, dailyDiscomfort, ampouleUsageRate, completionRate,
   lifestyleFactors, recoveryType, nextWeekSuggestion, sleepMinutesFromTimes, sleepCategoryFrom,
-  dailyInsight, reportEvidence,
+  dailyInsight, reportEvidence, overallChange,
 } from "@/lib/solvera/analysis";
 
 type Phase =
@@ -99,7 +100,7 @@ export function SolveraApp() {
 
   const startFresh = () => {
     const s: RecoverySession = {
-      version: 1, id: crypto.randomUUID(), startedAt: new Date().toISOString(), plantName: "나의 찔레꽃",
+      version: 1, id: crypto.randomUUID(), startedAt: new Date().toISOString(), plantName: loadQuickPlant()?.name ?? "나의 찔레꽃",
       skinType: "unknown", sensitivity: 3, currentCondition: "same",
       showMenstrualFactor: false, selectedConcerns: ["trouble"], baselineScores: {}, profileDone: false,
       dailyLogs: [], wateredDates: [], fertilizedDates: [], completed: false,
@@ -277,44 +278,116 @@ function Landing({ hasSession, onStart, onResume, onDemo, onQuick }: { hasSessio
 /* =============================================================================
    QUICK RITUAL — 가입·동의 없이 한 번 눌러 식물에 물 주기. 이 기기에만 저장한다.
 ============================================================================= */
+type RitualStage = "seed" | "plant" | "water" | "raining" | "wonder" | "born" | "done";
+const FRAME_COUNT = 8;
+
+function RitualScene({ stage, frame, onSoil }: { stage: RitualStage; frame: number; onSoil: () => void }) {
+  const grown = stage === "wonder" || stage === "born" || stage === "done";
+  const wet = stage === "raining" || grown;
+  const sprout = stage === "born" || stage === "done" ? FRAME_COUNT - 1 : stage === "wonder" ? frame : 0;
+  const label = { seed: "흙 언덕", plant: "씨앗이 흙으로 들어가는 모습", water: "씨앗이 묻힌 흙", raining: "물이 내리는 흙", wonder: "새싹이 올라오는 흙", born: "새로 태어난 새싹", done: "자라는 새싹" }[stage];
+  return (
+    <div className="ritual-scene relative mx-auto aspect-square w-full max-w-[340px]" role="img" aria-label={label}>
+      <div aria-hidden className="ritual-glow absolute inset-[6%] rounded-full" />
+      <button type="button" onClick={onSoil} disabled={stage !== "seed"} aria-label="흙에 씨앗 심기" className="absolute inset-0 z-10 cursor-pointer disabled:cursor-default" />
+      <img src="/ritual/soil_dry.png" alt="" className={`ritual-fade absolute inset-0 h-full w-full object-contain ${wet ? "opacity-0" : "opacity-100"}`} draggable={false} />
+      <img src={`/ritual/sprout_${sprout}.png`} alt="" className={`ritual-fade absolute inset-0 h-full w-full object-contain ${wet ? "opacity-100" : "opacity-0"} ${stage === "wonder" ? "ritual-wiggle" : stage === "born" ? "ritual-pop" : ""}`} draggable={false} />
+      {stage === "plant" && <img src="/ritual/seed.png" alt="" className="ritual-seed absolute left-1/2 top-[30%] w-[30%]" draggable={false} />}
+      {stage === "raining" && (
+        <>
+          <img src="/soopsai-watering-can.png" alt="" className="ritual-can absolute -right-1 top-[4%] w-[42%]" draggable={false} />
+          {[44, 47, 50, 53, 46, 49, 52, 48].map((left, i) => (
+            <span key={i} aria-hidden className="ritual-drop absolute top-[27%] h-4 w-2 rounded-full bg-[#6FB1EC]" style={{ left: `${left}%`, animationDelay: `${(i % 4) * 0.18}s` }} />
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
 function QuickRitual({ onFull, onBack }: { onFull: () => void; onBack: () => void }) {
   const [list, setList] = useState<QuickCheck[]>([]);
+  const [plant, setPlant] = useState<QuickPlant | null>(null);
+  const [stage, setStage] = useState<RitualStage>("seed");
+  const [frame, setFrame] = useState(0);
   const [picked, setPicked] = useState<QuickLevel | null>(null);
-  useEffect(() => { setList(loadQuick()); }, []);
-
+  const [draft, setDraft] = useState("");
   const today = todayISO();
-  const doneToday = list.find(c => c.date === today);
-  const shown = picked ?? doneToday?.level ?? null;
-  const streak = Math.max(quickStreak(list, today), shown !== null ? 1 : 0);
-  const day = Math.min(streak, 7);
+
+  useEffect(() => {
+    const l = loadQuick();
+    const p = loadQuickPlant();
+    setList(l); setPlant(p);
+    const l0 = l.find(c => c.date === today);
+    if (l0) setPicked(l0.level);
+    setStage(!p ? "seed" : l0 ? "done" : "water");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (stage === "plant") { const t = setTimeout(() => setStage("water"), 1300); return () => clearTimeout(t); }
+    if (stage === "raining") { const t = setTimeout(() => setStage(plant ? "done" : "wonder"), 1600); return () => clearTimeout(t); }
+    if (stage === "wonder") {
+      setFrame(0);
+      let f = 0;
+      const t = setInterval(() => {
+        f += 1;
+        setFrame(Math.min(f, FRAME_COUNT - 1));
+        if (f >= FRAME_COUNT - 1) { clearInterval(t); setTimeout(() => setStage("born"), 450); }
+      }, 190);
+      return () => clearInterval(t);
+    }
+  }, [stage, plant]);
 
   const choose = (level: QuickLevel) => {
     const next = addQuickCheck(list, today, level);
     setList(next); saveQuick(next); setPicked(level);
     trackEvent("quick_check");
+    setStage("raining");
+  };
+  const name = () => {
+    const saved = saveQuickPlant({ name: draft, plantedOn: today });
+    setPlant(saved);
+    setStage("done");
+  };
+
+  const streak = Math.max(quickStreak(list, today), picked !== null ? 1 : 0);
+  const title: Record<RitualStage, [string, string]> = {
+    seed: ["숲사이 어딘가, 흙 속에\n씨앗을 심어볼까요?", "흙을 톡 눌러보세요"],
+    plant: ["톡…", "씨앗이 흙 속으로 들어가요"],
+    water: plant ? [`${plant.name}에게\n물 줄 시간이에요`, "오늘 피부는 어때요? 하나를 고르면 물이 내려가요"] : ["이제 물이 필요해요", "오늘 피부는 어때요? 하나를 고르면 물이 내려가요"],
+    raining: ["촤르르…", "물이 흙에 스며들어요"],
+    wonder: ["어…?", "흙이 움직여요"],
+    born: ["내 찔레꽃이\n태어났어요!", "이름을 지어주세요"],
+    done: [plant ? `${plant.name}\n${streak}일째 자라고 있어요` : "", ""],
   };
 
   return (
     <Screen header={<TopBar subtitle="10 SECONDS" title="오늘의 물 주기" onBack={onBack} />}>
-      <div className="pt-4 text-center">
-        <div className="flower-garden" aria-label={`${GROWTH_STAGES[day]} 단계의 찔레꽃`}>
-          <div className="flower-garden-light" aria-hidden="true" />
-          <div className="flower-garden-plant"><BloomFlower day={day} size={170} /></div>
-          <div className="flower-garden-soil" aria-hidden="true" />
+      <div className="pt-3 text-center">
+        <RitualScene stage={stage} frame={frame} onSoil={() => setStage("plant")} />
+        <div aria-live="polite">
+          <h2 className="mt-4 whitespace-pre-line font-serif text-[24px] leading-[1.3] text-plum">{title[stage][0]}</h2>
+          {title[stage][1] && <p className="mt-1 text-[12px] text-charcoal/65">{title[stage][1]}</p>}
         </div>
-        {shown === null ? (
+
+        {stage === "seed" && <div className="mt-6"><PrimaryButton onClick={() => setStage("plant")}>씨앗 심기</PrimaryButton></div>}
+        {stage === "water" && (
+          <div className="mt-5 space-y-2">
+            {QUICK_LEVELS.map(q => <Chip key={q.level} active={false} onClick={() => choose(q.level)} block>{q.label}</Chip>)}
+          </div>
+        )}
+        {stage === "born" && (
+          <form className="mt-5 space-y-3" onSubmit={e => { e.preventDefault(); name(); }}>
+            <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} maxLength={MAX_PLANT_NAME_LENGTH} placeholder="나의 찔레꽃" aria-label="식물 이름"
+              className="w-full rounded-full border border-white/80 bg-white/60 px-5 py-3 text-center text-[17px] text-plum outline-none focus:border-forest" />
+            <PrimaryButton onClick={name}>이름 정하기</PrimaryButton>
+          </form>
+        )}
+        {stage === "done" && picked !== null && (
           <>
-            <h2 className="mt-5 font-serif text-[24px] text-plum">오늘 피부, 어때요?</h2>
-            <p className="mt-1 text-[12px] text-charcoal/65">하나만 누르면 식물에 물이 가요. 이 기기에만 저장돼요.</p>
+            <p className="mt-2 text-[13px] leading-[1.7] text-charcoal/75">{QUICK_LEVELS[picked].reply}</p>
             <div className="mt-6 space-y-2">
-              {QUICK_LEVELS.map(q => <Chip key={q.level} active={false} onClick={() => choose(q.level)} block>{q.label}</Chip>)}
-            </div>
-          </>
-        ) : (
-          <>
-            <h2 className="mt-5 font-serif text-[22px] text-plum">{streak}일째 물을 주고 있어요</h2>
-            <p className="mt-2 text-[13px] leading-[1.7] text-charcoal/75">{QUICK_LEVELS[shown].reply}</p>
-            <div className="mt-7 space-y-2">
               <PrimaryButton onClick={onFull}>내 패턴까지 보러 가기 (1분)</PrimaryButton>
               <PrimaryButton onClick={onBack} variant="ghost">내일 다시 올게요</PrimaryButton>
             </div>
@@ -341,11 +414,9 @@ function Consent({ onBack, onNext }: { onBack: () => void; onNext: (cloud: boole
       <h2 className="font-serif text-[24px] leading-tight text-plum mt-2">시작하기 전에</h2>
       <div className="mt-6 space-y-3">
         {[
-          ["하루 약 30~45초", "부담 없는 짧은 기록으로 진행돼요."],
-          ["7일 동안 기록", "매일 조금씩, 7일의 변화를 관찰해요."],
-          ["셀프 리포트", "직접 입력한 내용을 기반으로 한 개인 리포트예요."],
-          ["기기에 저장", "기본적으로 데이터는 현재 브라우저에만 저장돼요. 아래 선택 동의를 하지 않으면 서버로 보내지 않아요."],
-          ["진단이 아닙니다", "의료적 진단·치료 결과가 아니에요."],
+          ["하루 30초", "매일 한 번 누르면 돼요."],
+          ["내 기기에만 저장", "아래 선택에 동의하지 않으면 서버로 보내지 않아요."],
+          ["진단이 아니에요", "내 기록을 정리해주는 서비스예요."],
         ].map(([t, d]) => (
           <Card key={t} className="flex gap-3">
             <div className="mt-1 w-2 h-2 rounded-full bg-rose shrink-0" />
@@ -360,13 +431,17 @@ function Consent({ onBack, onNext }: { onBack: () => void; onNext: (cloud: boole
       <label className="glass-surface mt-8 flex items-start gap-3 rounded-2xl p-4 cursor-pointer">
         <input type="checkbox" checked={ok} onChange={e => setOk(e.target.checked)} className="mt-1 h-5 w-5 accent-plum" />
         <span className="text-[13px] leading-[1.5] text-charcoal/80">
-          위 내용을 확인했으며, 셀프 기록 리포트 목적으로 데이터를 이 기기에 저장하는 것에 동의해요.
+          확인했어요.
         </span>
       </label>
       <label className="glass-surface mt-3 flex items-start gap-3 rounded-2xl p-4 cursor-pointer">
         <input type="checkbox" checked={cloud} onChange={e => setCloud(e.target.checked)} className="mt-1 h-5 w-5 accent-plum" />
         <span className="text-[13px] leading-[1.5] text-charcoal/80">
-          <b className="text-plum">(선택)</b> 내 기록을 서버에 보내 맞춤 분석과 서비스 개선에 쓰는 것에 동의해요. 피부 점수·수면·감정·운동·생활 요인(생리 전·중 포함)이 이름 없이 저장되고, 자유 입력 메모와 식물 이름은 보내지 않아요. 여러 고객의 기록은 합쳐서 분석 기준을 개선하는 데 쓰이고, 언제든 철회하면 서버 기록이 삭제돼요. 동의하지 않아도 모든 기능을 똑같이 쓸 수 있어요.
+          <b className="text-plum">(선택)</b> 기록을 익명으로 보내 맞춤 분석에 써요. 철회하면 삭제돼요.
+          <details className="mt-1.5 text-[11.5px] leading-[1.55] text-charcoal/65">
+            <summary className="cursor-pointer font-semibold text-forest">자세히 보기</summary>
+            <p className="mt-1">보내는 것: 피부 점수·수면·감정·운동·생활 요인(생리 전·중 표시 포함)이 이름 없이 저장돼요. 자유 입력 메모와 식물 이름은 보내지 않아요. 여러 고객의 기록은 합쳐서 분석 기준을 개선하는 데 쓰이고, 언제든 철회하면 서버 기록이 삭제돼요. 동의하지 않아도 모든 기능을 똑같이 쓸 수 있어요.</p>
+          </details>
         </span>
       </label>
     </Screen>
@@ -1144,16 +1219,18 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
   const evidence = useMemo(() => reportEvidence(session), [session]);
 
   const sortedResults = [...results].sort((a, b) => b.delta - a.delta);
-  const baselineMean = results.length ? results.reduce((sum, result) => sum + result.start, 0) / results.length : null;
-  const finalMean = session.dailyLogs.length ? dailyDiscomfort(session.dailyLogs[session.dailyLogs.length - 1], session.selectedConcerns) : null;
+  const overall = overallChange(session);
+  const top = factors[0];
+  const subject = results.length === 1 ? results[0].label : "피부 불편";
+  const verdictLabel = { better: "좋아졌어요", same: "큰 변화는 없어요", worse: "더 나빠졌어요" } as const;
   const shareReport = async () => {
     const lines = [
       "SOOPSAI · 나만의 7일 피부 일기",
-      `나의 관찰 유형: ${rtype.label}`,
-      baselineMean !== null && finalMean !== null ? `평균 불편 점수: ${baselineMean.toFixed(1)}점 → ${finalMean.toFixed(1)}점` : "",
-      factors[0] ? `함께 변한 생활 요인: ${factors[0].label} (있던 날 ${factors[0].withDays}일, 없던 날 ${factors[0].withoutDays}일)` : "",
+      top ? `'${top.label}'이 있던 날 ${subject} 점수가 평균 ${Math.abs(top.diff).toFixed(1)}점 ${top.diff > 0 ? "높았어요" : "낮았어요"}` : "아직 뚜렷한 신호는 없어요",
+      overall ? `피부 변화: ${verdictLabel[overall.verdict]} (${overall.baseline.toFixed(1)}점 → ${overall.recent.toFixed(1)}점)` : "",
+      top ? `비교: 있던 날 ${top.withDays}일 · 없던 날 ${top.withoutDays}일` : "",
       ...results.map(result => `${result.label}: ${result.start}점 → ${result.end}점`),
-      "자가 기록의 동반 패턴이며 원인이나 제품 효과를 판정한 결과는 아니에요.",
+      "내 기록 기준이며 진단이나 원인 판정은 아니에요.",
       window.location.origin,
     ].filter(Boolean);
     const text = lines.join("\n");
@@ -1190,25 +1267,48 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
           <div className="relative z-10 text-[10px] tracking-brand text-white/60 uppercase">RECOVERY REPORT · N°{session.id.slice(0,6).toUpperCase()}</div>
           <div className="relative z-10 font-serif tracking-[0.3em] text-[16px] text-white/85 mt-1">SOOPSAI</div>
           <div className="relative z-10 mt-6">
-            <div className="text-[11px] tracking-brand text-white/60 uppercase">나의 관찰 유형</div>
-            <div className="mt-2 font-serif text-[28px] font-bold leading-tight text-white">{rtype.label}</div>
-            <p className="mt-4 font-serif text-[17px] leading-[1.5] text-white/95 max-w-[220px]">
-              {factors[0] ? `${factors[0].label}이(가) 있던 날과 없던 날, 피부 불편 점수에 차이가 있었어요.` : "이번 7일은 비교 가능한 생활 요인이 충분하지 않았어요."}
-            </p>
-            <p className="text-[10px] text-white/60 mt-2">7일 자가 기록에서 관찰된 패턴 · 원인 판정 아님</p>
+            <div className="text-[11px] tracking-brand text-white/60 uppercase">이번 기록의 결론</div>
+            {top ? (
+              <>
+                <p className="mt-3 max-w-[232px] font-serif text-[22px] font-bold leading-[1.35] text-white">
+                  '{top.label}'이 있던 날, {subject} 점수가 평균 <span className="tnum">{Math.abs(top.diff).toFixed(1)}점</span> {top.diff > 0 ? "높았어요" : "낮았어요"}
+                </p>
+                <p className="tnum mt-3 text-[12px] text-white/75">있던 날 {top.withDays}일 · 없던 날 {top.withoutDays}일 비교{top.confidence === "repeated" ? " · 여러 날 반복" : ""}</p>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 max-w-[232px] font-serif text-[22px] font-bold leading-[1.35] text-white">아직 뚜렷한 신호는 없어요</p>
+                <p className="mt-3 text-[12px] text-white/75">같은 요인이 있던 날과 없던 날이 2일씩 쌓이면 비교해드려요.</p>
+              </>
+            )}
+            <p className="mt-4 text-[10px] text-white/60">내 기록 기준이에요 · 진단이나 원인 판정은 아니에요</p>
           </div>
         </div>
 
-        <p className="px-1 text-[12px] leading-[1.6] text-charcoal/70">{rtype.desc}</p>
+        {/* 한눈에 */}
+        <div className="grid grid-cols-2 gap-3 print-avoid-break">
+          <Card className="min-h-[104px]">
+            <div className="text-[11px] tracking-brand text-muted-foreground uppercase">피부 변화</div>
+            <div className="mt-2 font-serif text-[19px] font-bold leading-tight text-plum">{overall ? verdictLabel[overall.verdict] : "–"}</div>
+            {overall && <div className="tnum mt-1 text-[12px] text-charcoal/65">{overall.baseline.toFixed(1)}점 → {overall.recent.toFixed(1)}점</div>}
+          </Card>
+          <Card className="min-h-[104px]">
+            <div className="text-[11px] tracking-brand text-muted-foreground uppercase">내 신호 1순위</div>
+            <div className="mt-2 font-serif text-[19px] font-bold leading-tight text-plum break-keep">{top ? top.label : "아직 없어요"}</div>
+            <div className="mt-1 text-[12px] text-charcoal/65">{top ? (top.diff > 0 ? "점수가 올라가는 쪽" : "점수가 내려가는 쪽") : "기록이 더 필요해요"}</div>
+          </Card>
+        </div>
+        <Card className="print-avoid-break">
+          <div className="text-[11px] tracking-brand text-muted-foreground uppercase">다음 7일, 이렇게 해봐요</div>
+          <p className="mt-2 font-serif text-[15px] leading-[1.6] text-plum">{suggestion}</p>
+        </Card>
 
         {/* Small cards */}
         <div className="grid grid-cols-2 gap-3 print-avoid-break">
           <Card className="min-h-[110px]">
-            <div className="text-[11px] tracking-brand text-muted-foreground uppercase">평균 불편 점수</div>
-            <div className="mt-2 font-serif text-[15px] text-plum leading-tight break-keep">선택한 고민 {results.length}개 기준</div>
-            <div className="tnum font-bold text-plum mt-1" style={{ fontSize: 24 }}>
-              {baselineMean !== null && finalMean !== null ? `${baselineMean.toFixed(1)} → ${finalMean.toFixed(1)}` : "–"}
-            </div>
+            <div className="text-[11px] tracking-brand text-muted-foreground uppercase">기록한 날</div>
+            <div className="tnum font-bold text-plum mt-2" style={{ fontSize: 32 }}>{evidence.loggedDays}일</div>
+            <div className="text-[11px] text-muted-foreground mt-1 tnum">점수 기록 {evidence.scoredDays}일</div>
           </Card>
           <Card className="min-h-[110px]">
             <div className="text-[11px] tracking-brand text-muted-foreground uppercase">숲사이 앰플 사용 기록</div>
@@ -1223,33 +1323,38 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
           <span>선택 고민 {session.selectedConcerns.length}개</span>
         </div>
 
-        <Card className="print-avoid-break">
-          <div className="text-[11px] tracking-brand text-muted-foreground uppercase">이 리포트의 근거 기록</div>
-          <div className="mt-2 text-[13px] leading-[1.7] text-charcoal/80">
-            점수가 기록된 날 <b className="tnum text-plum">{evidence.scoredDays}일</b> · 앰플 사용 기록 <b className="tnum text-plum">{evidence.ampouleDays}일</b>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+        <details className="glass-surface print-avoid-break rounded-2xl p-4">
+          <summary className="cursor-pointer text-[13px] font-semibold text-plum">이 리포트의 근거 기록 · <span className="tnum">{evidence.scoredDays}일</span></summary>
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {evidence.dates.map(date => <span key={date} className="tnum rounded-full border border-border bg-secondary/60 px-2 py-0.5 text-[10px] text-charcoal/70">{date.slice(5)}</span>)}
             {evidence.skippedDates.map(date => <span key={date} className="tnum rounded-full border border-dashed border-border px-2 py-0.5 text-[10px] text-muted-foreground">{date.slice(5)} 쉬어감</span>)}
           </div>
-          <p className="mt-2 text-[11px] leading-[1.5] text-muted-foreground">아래 모든 숫자는 이 날짜들에 직접 입력한 기록에서만 계산했어요. 쉬어간 날은 계산에 넣지 않았어요.</p>
-        </Card>
+          <p className="mt-2 text-[11px] leading-[1.5] text-muted-foreground">아래 숫자는 이 날짜에 직접 입력한 기록으로만 계산했어요. 쉬어간 날은 넣지 않았어요.</p>
+        </details>
 
         <section className="space-y-3">
-          <SectionTitle n="LIFESTYLE PATTERN" title="생활 요인과 피부의 동반 변화" />
+          <SectionTitle n="SIGNALS" title="내 피부 신호" />
           {factors.length === 0
             ? <Card><div className="text-[13px] text-charcoal/70 leading-[1.6]">각 요인이 있던 날과 없던 날을 2일 이상씩 비교할 자료가 부족하거나, 평균 차이가 0.5점 미만이었어요.</div></Card>
             : factors.map((f, i) => (
                 <Card key={f.key} className="print-avoid-break">
                   <div className="flex items-baseline justify-between gap-2">
-                    <div className="font-serif text-[17px] text-plum">{i + 1}. {f.label}{f.confidence === "repeated" && <span className="ml-2 rounded-full bg-moss/15 px-2 py-0.5 align-middle font-sans text-[10px] font-semibold text-moss">여러 날 반복</span>}</div>
-                    <div className={`tnum shrink-0 font-bold text-[18px] ${f.diff > 0 ? "text-destructive" : "text-moss"}`}>{f.diff > 0 ? "+" : ""}{f.diff.toFixed(1)}점</div>
+                    <div className="font-serif text-[17px] text-plum">{i + 1}. {f.label}</div>
+                    <div className={`tnum shrink-0 font-bold text-[20px] ${f.diff > 0 ? "text-destructive" : "text-moss"}`}>{f.diff > 0 ? "+" : ""}{f.diff.toFixed(1)}점</div>
                   </div>
-                  <div className="mt-2 text-[12px] leading-[1.6] text-charcoal/75">있던 날 {f.withDays}일 · 평균 {f.withAvg.toFixed(1)}점 <span className="tnum text-muted-foreground">({f.withDates.map(d => d.slice(5)).join(", ")})</span><br />없던 날 {f.withoutDays}일 · 평균 {f.withoutAvg.toFixed(1)}점 <span className="tnum text-muted-foreground">({f.withoutDates.map(d => d.slice(5)).join(", ")})</span></div>
-                  <p className="mt-2 text-[11px] leading-[1.5] text-muted-foreground">{f.confidence === "repeated" ? `있던 날 ${f.withDays}일 중 ${Math.round(f.consistency * f.withDays)}일이 같은 방향이었어요. ` : "아직 날짜가 적어 참고용이에요. "}자가 기록의 평균 차이이며 원인 관계는 알 수 없어요.</p>
-                  <p className="mt-1 text-[11px] leading-[1.5] text-charcoal/65 tnum">기록이 적을 땐 차이를 보수적으로 줄여 추정해요 · 추정 {f.shrunkDiff > 0 ? "+" : ""}{f.shrunkDiff.toFixed(1)}점 (범위 {f.ciLow.toFixed(1)} ~ {f.ciHigh.toFixed(1)}){f.clear ? " · 범위가 0을 벗어나요" : " · 아직 0을 포함해요"}</p>
-                  {f.lagged && <p className="mt-1 text-[11px] leading-[1.5] text-muted-foreground">전날 기록과 다음 날 피부 점수를 이어서 비교했어요.</p>}
-                  {f.literature && <p className="mt-1 text-[11px] leading-[1.5] text-muted-foreground">{f.literature}</p>}
+                  <div className="mt-1">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${f.clear ? "bg-moss/15 text-moss" : f.confidence === "repeated" ? "bg-moss/10 text-moss" : "bg-secondary text-charcoal/60"}`}>
+                      {f.clear ? "확실해 보여요" : f.confidence === "repeated" ? "여러 날 반복" : "아직 참고용"}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-[13px] leading-[1.6] text-charcoal/80 tnum">있던 날 {f.withDays}일 평균 <b>{f.withAvg.toFixed(1)}점</b> · 없던 날 {f.withoutDays}일 평균 <b>{f.withoutAvg.toFixed(1)}점</b></div>
+                  <details className="mt-2 text-[11px] leading-[1.6] text-charcoal/65">
+                    <summary className="cursor-pointer font-semibold text-forest">자세히 보기</summary>
+                    <p className="mt-1 tnum">있던 날 {f.withDates.map(d => d.slice(5)).join(", ")} / 없던 날 {f.withoutDates.map(d => d.slice(5)).join(", ")}</p>
+                    <p className="mt-1 tnum">기록이 적을 땐 차이를 보수적으로 줄여 추정해요 · 추정 {f.shrunkDiff > 0 ? "+" : ""}{f.shrunkDiff.toFixed(1)}점 (범위 {f.ciLow.toFixed(1)} ~ {f.ciHigh.toFixed(1)})</p>
+                    {f.lagged && <p className="mt-1">전날 기록과 다음 날 피부 점수를 이어서 비교했어요.</p>}
+                    {f.literature && <p className="mt-1">{f.literature}</p>}
+                  </details>
                 </Card>
               ))}
           <details className="px-1 text-[11px] leading-[1.6] text-charcoal/65">
@@ -1275,7 +1380,7 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
               </div>
               <div className="text-[12px] text-charcoal/70 mt-2 leading-[1.6]">
                 {r.delta > 0 ? `${r.label} 불편 점수가 시작일보다 ${r.delta}점 낮게 기록됐어요.` : r.delta < 0 ? `${r.label} 불편 점수가 시작일보다 ${-r.delta}점 높게 기록됐어요.` : "시작일과 같은 점수로 기록됐어요."}
-                <span className="block text-[11px] text-muted-foreground mt-1">{r.meaningful ? "마지막 이틀 평균이 시작 점수에서 약 2점 또는 30% 이상 달라졌어요." : "마지막 이틀 평균 기준으로는 변화 폭이 작아요(약 2점·30% 미만)."}</span>
+                <span className="block text-[11px] text-muted-foreground mt-1">{r.meaningful ? "눈에 띄게 달라졌어요" : "큰 변화는 없어요"}</span>
               </div>
             </Card>
           ))}
@@ -1307,14 +1412,6 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
             </Card>
           </section>
         )}
-
-        {/* Next 7 days */}
-        <section className="space-y-3">
-          <SectionTitle n="NEXT 7 DAYS" title="다음 7일 제안" />
-          <Card className="print-avoid-break">
-            <p className="text-[14px] text-plum leading-[1.7] font-serif">{suggestion}</p>
-          </Card>
-        </section>
 
         {!demoMode && <RewardRequest session={session} />}
 

@@ -45,6 +45,19 @@ export function concernResults(session: RecoverySession): ConcernResult[] {
   });
 }
 
+export type OverallVerdict = "better" | "same" | "worse";
+
+/** 선택한 고민 전체의 평균 변화: 시작 점수 평균과 마지막 이틀 평균을 비교해 "의미 있는 변화 폭"(약 2점 또는 30%) 이상일 때만 좋아짐/나빠짐으로 말한다. */
+export function overallChange(session: RecoverySession): { baseline: number; recent: number; delta: number; verdict: OverallVerdict } | null {
+  const results = concernResults(session);
+  if (!results.length) return null;
+  const baseline = results.reduce((a, r) => a + r.start, 0) / results.length;
+  const recent = results.reduce((a, r) => a + r.endRecent, 0) / results.length;
+  const delta = baseline - recent;
+  const big = Math.abs(delta) >= MEANINGFUL_ABSOLUTE || (baseline > 0 && Math.abs(delta) / baseline >= MEANINGFUL_RELATIVE);
+  return { baseline, recent, delta, verdict: !big ? "same" : delta > 0 ? "better" : "worse" };
+}
+
 export function averageImprovement(session: RecoverySession): number | null {
   const results = concernResults(session).filter(r => r.improvement !== null) as (ConcernResult & { improvement: number })[];
   if (!results.length) return null;

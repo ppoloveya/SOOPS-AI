@@ -459,3 +459,24 @@ input[type="range"].brand-slider::-moz-range-thumb {
   @page { size: A4; margin: 12mm; }
   * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
+
+/* 10초 의식 — 씨앗 심기, 물 주기, 새싹 탄생 */
+.ritual-scene img { user-select: none; -webkit-user-drag: none; }
+.ritual-glow { background: radial-gradient(closest-side, rgba(255,247,214,0.85), rgba(255,247,214,0) 72%); animation: ritual-glow 2.8s ease-in-out infinite; }
+.ritual-seed { animation: ritual-seed 1.15s cubic-bezier(.4,.1,.6,1) forwards; }
+.ritual-drop { animation: ritual-drop 0.85s linear infinite; }
+.ritual-can { transform-origin: 85% 90%; animation: ritual-can 1.5s ease-in-out forwards; }
+.ritual-pop { animation: ritual-pop 0.7s cubic-bezier(.2,1.4,.4,1) both; }
+.ritual-wiggle { animation: ritual-wiggle 0.5s ease-in-out infinite; }
+.ritual-fade { transition: opacity 0.7s ease; }
+@keyframes ritual-glow { 0%,100% { opacity: .55; transform: scale(.96); } 50% { opacity: 1; transform: scale(1.04); } }
+@keyframes ritual-seed { 0% { transform: translate(-50%, -150%) rotate(-25deg) scale(1); opacity: 0; } 12% { opacity: 1; } 78% { transform: translate(-50%, 8%) rotate(12deg) scale(.82); opacity: 1; } 100% { transform: translate(-50%, 34%) rotate(0) scale(.5); opacity: 0; } }
+@keyframes ritual-drop { 0% { transform: translateY(-26px); opacity: 0; } 20% { opacity: .95; } 100% { transform: translateY(120px); opacity: 0; } }
+@keyframes ritual-can { 0% { transform: rotate(0); } 35% { transform: rotate(-32deg); } 80% { transform: rotate(-32deg); } 100% { transform: rotate(0); } }
+@keyframes ritual-pop { 0% { transform: scale(.55); } 100% { transform: scale(1); } }
+@keyframes ritual-wiggle { 0%,100% { transform: translateY(0) rotate(0); } 30% { transform: translateY(-3px) rotate(-1.2deg); } 70% { transform: translateY(-1px) rotate(1.2deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .ritual-glow, .ritual-seed, .ritual-drop, .ritual-can, .ritual-pop, .ritual-wiggle { animation: none !important; }
+  .ritual-seed { opacity: 0; }
+}

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { concernResults, lifestyleFactors, nonoverlapAllPairs } from "./analysis.ts";
+import { concernResults, lifestyleFactors, nonoverlapAllPairs, overallChange } from "./analysis.ts";
 import { estimateDifference } from "./estimate.ts";
 
 const NONE_META = { intensity: "none", sweat: "none", environment: "none" };
@@ -141,4 +141,14 @@ test("old records without source info are treated as customer-entered", () => {
     sleepMinutes: i % 2 ? 300 : 450, sleepCategory: i % 2 ? "under5" : "overSeven",
   }));
   assert.ok(lifestyleFactors(session(logs)).some(f => f.key === "sleep_under6"));
+});
+
+test("the overall verdict only says better or worse when the change is about 2 points or 30%", () => {
+  const mk = (scores, baseline) => session(scores.map((v, i) => day(i + 1, `2026-11-${String(i + 1).padStart(2, "0")}`, v)), baseline);
+  assert.equal(overallChange(mk([4, 3, 3], 7)).verdict, "better");
+  assert.equal(overallChange(mk([6, 6, 6], 7)).verdict, "same");
+  assert.equal(overallChange(mk([8, 9, 9], 5)).verdict, "worse");
+  const o = overallChange(mk([4, 3, 3], 7));
+  assert.equal(o.baseline, 7);
+  assert.equal(o.recent, 3);
 });

@@ -235,7 +235,8 @@ function parseLife(text: string, showMenstrual: boolean): LifeDraft {
   addContext("mask", ["마스크"]);
   addContext("newcosmetic", ["새화장품", "처음쓴", "새로쓴"]);
   addContext("latecleanse", ["늦게씻", "클렌징늦", "늦은클렌징"]);
-  addContext("skippedcleanse", ["세안안", "세수안", "클렌징안", "세안깜빡", "세안까먹", "안씻고잤", "안씻고"]);
+  // "세안을 깜빡했어요", "세수 안 했어", "클렌징을 못 했어"처럼 조사가 끼어도 읽는다
+  if (/(세안|세수|클렌징)(을|를|은|는|도)?(깜빡|까먹|안했|안하고|못했|건너|생략)/.test(t) || includesAny(t, ["안씻고잤", "안씻고"])) context.push("skippedcleanse");
 
   let sleep: SleepCategory = "sixToSeven";
   let sleepFound = false;

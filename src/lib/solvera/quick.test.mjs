@@ -31,3 +31,16 @@ test("the 10-second tap becomes a rough starting-score suggestion that stays on 
   assert.ok(QUICK_LEVEL_TO_SCORE[0] < QUICK_LEVEL_TO_SCORE[1] && QUICK_LEVEL_TO_SCORE[1] < QUICK_LEVEL_TO_SCORE[2]);
   assert.ok(Object.values(QUICK_LEVEL_TO_SCORE).every(v => v >= 0 && v <= 10));
 });
+
+test("the plant name is cleaned the same way as in the full record", async () => {
+  const store = new Map();
+  globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+  const { saveQuickPlant, loadQuickPlant } = await import("./quick.ts");
+  assert.equal(loadQuickPlant(), null);
+  assert.deepEqual(saveQuickPlant({ name: "  봄이  ", plantedOn: "2026-11-28" }), { name: "봄이", plantedOn: "2026-11-28" });
+  assert.deepEqual(loadQuickPlant(), { name: "봄이", plantedOn: "2026-11-28" });
+  assert.equal(saveQuickPlant({ name: "   ", plantedOn: "2026-11-28" }).name, "나의 찔레꽃");
+  store.set("soopsai:quick-plant", "{broken");
+  assert.equal(loadQuickPlant(), null);
+  delete globalThis.localStorage;
+});
