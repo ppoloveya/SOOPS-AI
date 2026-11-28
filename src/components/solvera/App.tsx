@@ -29,8 +29,8 @@ import { GROWTH_STAGES, MAX_GROWTH_XP, growthProgress } from "@/lib/solvera/grow
 import { topKeyword } from "@/lib/solvera/keyword";
 import {
   concernResults, dailyDiscomfort, ampouleUsageRate, completionRate,
-  lifestyleFactors, recoveryType, nextWeekSuggestion, sleepMinutesFromTimes, sleepCategoryFrom,
-  dailyInsight, reportEvidence, overallChange,
+  lifestyleFactors, recoveryType, sleepMinutesFromTimes, sleepCategoryFrom,
+  dailyInsight, reportEvidence, overallChange, bestAndWorstDays, changeHeadline, nextAction,
 } from "@/lib/solvera/analysis";
 
 type Phase =
@@ -1215,7 +1215,9 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
   const compl = useMemo(() => completionRate(session), [session]);
   const factors = useMemo(() => lifestyleFactors(session, { priors }), [session, priors]);
   const rtype = useMemo(() => recoveryType(session, factors), [session, factors]);
-  const suggestion = useMemo(() => nextWeekSuggestion(factors), [factors]);
+  const action = useMemo(() => nextAction(factors), [factors]);
+  const change = useMemo(() => changeHeadline(session), [session]);
+  const notable = useMemo(() => bestAndWorstDays(session), [session]);
   const evidence = useMemo(() => reportEvidence(session), [session]);
 
   const sortedResults = [...results].sort((a, b) => b.delta - a.delta);
@@ -1229,6 +1231,8 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
       top ? `'${top.label}'이 있던 날 ${subject} 점수가 평균 ${Math.abs(top.diff).toFixed(1)}점 ${top.diff > 0 ? "높았어요" : "낮았어요"}` : "아직 뚜렷한 신호는 없어요",
       overall ? `피부 변화: ${verdictLabel[overall.verdict]} (${overall.baseline.toFixed(1)}점 → ${overall.recent.toFixed(1)}점)` : "",
       top ? `비교: 있던 날 ${top.withDays}일 · 없던 날 ${top.withoutDays}일` : "",
+      `나의 유형: ${rtype.label}${rtype.tentative ? " (잠정)" : ""}`,
+      `다음 7일: ${action.title}`,
       ...results.map(result => `${result.label}: ${result.start}점 → ${result.end}점`),
       "내 기록 기준이며 진단이나 원인 판정은 아니에요.",
       window.location.origin,
@@ -1266,23 +1270,26 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
           </div>
           <div className="relative z-10 text-[10px] tracking-brand text-white/60 uppercase">RECOVERY REPORT · N°{session.id.slice(0,6).toUpperCase()}</div>
           <div className="relative z-10 font-serif tracking-[0.3em] text-[16px] text-white/85 mt-1">SOOPSAI</div>
-          <div className="relative z-10 mt-6">
-            <div className="text-[11px] tracking-brand text-white/60 uppercase">이번 기록의 결론</div>
-            {top ? (
-              <>
-                <p className="mt-3 max-w-[232px] font-serif text-[22px] font-bold leading-[1.35] text-white">
-                  '{top.label}'이 있던 날, {subject} 점수가 평균 <span className="tnum">{Math.abs(top.diff).toFixed(1)}점</span> {top.diff > 0 ? "높았어요" : "낮았어요"}
-                </p>
-                <p className="tnum mt-3 text-[12px] text-white/75">있던 날 {top.withDays}일 · 없던 날 {top.withoutDays}일 비교{top.confidence === "repeated" ? " · 여러 날 반복" : ""}</p>
-              </>
-            ) : (
-              <>
-                <p className="mt-3 max-w-[232px] font-serif text-[22px] font-bold leading-[1.35] text-white">아직 뚜렷한 신호는 없어요</p>
-                <p className="mt-3 text-[12px] text-white/75">같은 요인이 있던 날과 없던 날이 2일씩 쌓이면 비교해드려요.</p>
-              </>
-            )}
-            <p className="mt-4 text-[10px] text-white/60">내 기록 기준이에요 · 진단이나 원인 판정은 아니에요</p>
+          <div className="relative z-10 mt-5 max-w-[250px] space-y-4">
+            <div>
+              <div className="text-[10px] tracking-brand text-white/60 uppercase">① 이번 7일, 달라진 점</div>
+              <div className="mt-1 font-serif text-[22px] font-bold leading-tight text-white">{overall ? verdictLabel[overall.verdict] : "기록을 더 쌓아주세요"}</div>
+              {overall && <p className="tnum mt-1 text-[12px] leading-[1.5] text-white/80">평균 {overall.baseline.toFixed(1)}점 → {overall.recent.toFixed(1)}점{change && change.direction !== "same" ? ` · ${change.title}` : ""}</p>}
+            </div>
+            <div>
+              <div className="text-[10px] tracking-brand text-white/60 uppercase">② 나는 이런 유형</div>
+              <div className="mt-1 flex items-center gap-2">
+                <span className="font-serif text-[22px] font-bold leading-tight text-white">{rtype.label}</span>
+                {rtype.tentative && <span className="rounded-full border border-white/40 px-2 py-0.5 text-[10px] text-white/80">잠정</span>}
+              </div>
+              {top && <p className="tnum mt-1 text-[12px] leading-[1.5] text-white/80">'{top.label}'이 있던 날 평균 {Math.abs(top.diff).toFixed(1)}점 {top.diff > 0 ? "높았어요" : "낮았어요"} (있던 날 {top.withDays}일 · 없던 날 {top.withoutDays}일)</p>}
+            </div>
+            <div>
+              <div className="text-[10px] tracking-brand text-white/60 uppercase">③ 다음 7일, 이렇게 해보세요</div>
+              <p className="mt-1 font-serif text-[16px] leading-[1.45] text-white/95">{action.title}</p>
+            </div>
           </div>
+          <p className="relative z-10 mt-4 text-[10px] text-white/55">내 기록 기준이에요 · 진단이나 원인 판정은 아니에요</p>
         </div>
 
         {/* 한눈에 */}
@@ -1300,7 +1307,10 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
         </div>
         <Card className="print-avoid-break">
           <div className="text-[11px] tracking-brand text-muted-foreground uppercase">다음 7일, 이렇게 해봐요</div>
-          <p className="mt-2 font-serif text-[15px] leading-[1.6] text-plum">{suggestion}</p>
+          <p className="mt-2 font-serif text-[16px] leading-[1.5] text-plum">{action.title}</p>
+          <ol className="mt-3 space-y-1.5 text-[13px] leading-[1.6] text-charcoal/80">
+            {action.steps.map((step, i) => <li key={step} className="flex gap-2"><span className="tnum font-semibold text-plum">{i + 1}</span><span>{step}</span></li>)}
+          </ol>
         </Card>
 
         {/* Small cards */}
@@ -1331,6 +1341,25 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
           </div>
           <p className="mt-2 text-[11px] leading-[1.5] text-muted-foreground">아래 숫자는 이 날짜에 직접 입력한 기록으로만 계산했어요. 쉬어간 날은 넣지 않았어요.</p>
         </details>
+
+        {notable && (
+          <section className="space-y-3">
+            <SectionTitle n="BEST & WORST DAY" title="가장 편했던 날과 불편했던 날" />
+            <div className="grid grid-cols-2 gap-3 print-avoid-break">
+              {([["편했던 날", notable.best], ["불편했던 날", notable.worst]] as const).map(([title, day]) => (
+                <Card key={title}>
+                  <div className="text-[11px] tracking-brand text-muted-foreground uppercase">{title}</div>
+                  <div className="mt-1 tnum font-bold text-plum text-[22px]">{day.score}점</div>
+                  <div className="tnum text-[11px] text-muted-foreground">{day.date.slice(5)}</div>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {day.tags.map(tag => <span key={tag} className="rounded-full border border-border bg-secondary/60 px-2 py-0.5 text-[10px] text-charcoal/70">{tag}</span>)}
+                  </div>
+                </Card>
+              ))}
+            </div>
+            <p className="px-1 text-[11px] leading-[1.5] text-muted-foreground">두 날을 그대로 보여드릴 뿐, 이 차이가 무엇 때문인지는 알 수 없어요.</p>
+          </section>
+        )}
 
         <section className="space-y-3">
           <SectionTitle n="SIGNALS" title="내 피부 신호" />

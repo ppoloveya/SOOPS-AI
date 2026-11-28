@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test src/lib/solvera/*.test.mjs"
+    "test": "node --test src/lib/solvera/*.test.mjs",
+    "simulate": "node scripts/simulate-report.mjs"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

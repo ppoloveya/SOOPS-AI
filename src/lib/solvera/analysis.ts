@@ -267,9 +267,22 @@ export type RecoveryTypeKey =
   | "sleep_sensitive" | "emotion_reactive" | "travel_reactive" | "outdoor_reactive"
   | "exercise_heat" | "hormonal" | "routine_stable" | "weather_reactive" | "observation";
 
-export function recoveryType(session: RecoverySession, topFactors: LifestyleFactor[]): { key: RecoveryTypeKey; label: string; desc: string } {
+export interface RecoveryTypeResult { key: RecoveryTypeKey; label: string; desc: string; /** 추정 범위가 0을 포함하는 잠정 유형인가 — 유형 이름은 항상 붙이고, 확신 정도만 표시로 구분한다 */ tentative: boolean }
+
+/**
+ * 나의 유형. 사용자가 "그래서 나는 무슨 형인가"를 바로 알 수 있도록 1순위 요인이 있으면 항상 이름을 붙인다.
+ * 다만 합성 사용자 시뮬레이션(docs/simulation.md)에서 효과가 없는 사용자의 대부분에게도 1순위 요인이 생겼으므로,
+ * 추정 범위가 0을 포함하면 `tentative`로 표시해 "잠정"이라고 밝힌다.
+ */
+export function recoveryType(_session: RecoverySession, topFactors: LifestyleFactor[]): RecoveryTypeResult {
   const top = topFactors[0];
-  if (!top) return { key: "observation", label: "추가 관찰형", desc: "이번 7일은 비교할 수 있는 날이 충분한 단일 생활 요인이 없었어요. 다음 기록에서 같은 항목을 이어서 살펴보세요." };
+  const base = baseRecoveryType(top);
+  const tentative = !!top && !top.clear;
+  return { ...base, tentative, desc: tentative ? `${base.desc} 비교한 날이 아직 적어 잠정이에요.` : base.desc };
+}
+
+function baseRecoveryType(top: LifestyleFactor | undefined): { key: RecoveryTypeKey; label: string; desc: string } {
+  if (!top) return { key: "observation", label: "기록 쌓는 중형", desc: "이번 7일은 같은 요인이 있던 날과 없던 날을 비교할 만큼 기록이 겹치지 않았어요. 다음 7일을 이어서 기록하면 유형이 나와요." };
   const desc = `${top.label}을(를) 기록한 ${top.withDays}일의 피부 불편 점수가 기록하지 않은 ${top.withoutDays}일보다 평균 ${Math.abs(top.diff).toFixed(1)}점 ${top.diff > 0 ? "높았어요" : "낮았어요"}. 함께 나타난 패턴이며 원인으로 단정할 수는 없어요.`;
   if (top.category === "sleep") return { key: "sleep_sensitive", label: "수면 동반형", desc };
   if (top.category === "emotion") return { key: "emotion_reactive", label: "감정 동반형", desc };
@@ -281,6 +294,63 @@ export function recoveryType(session: RecoverySession, topFactors: LifestyleFact
   if (top.category === "weather") return { key: "weather_reactive", label: "날씨 동반형", desc };
   if (top.category === "exercise" || top.category === "environment") return { key: "exercise_heat", label: "활동 동반형", desc };
   return { key: "routine_stable", label: "생활 리듬 동반형", desc };
+}
+
+export interface NextAction { title: string; steps: string[] }
+
+/** 다음 7일에 "무엇을 하면 되는지"를 한 가지 실험으로 알려준다. 결과를 약속하지 않고, 같은 방식으로 다시 비교하는 것까지가 행동이다. */
+export function nextAction(topFactors: LifestyleFactor[]): NextAction {
+  const top = topFactors[0];
+  const keepLogging = "피부 점수는 지금처럼 매일 기록하기";
+  const recompare = "7일 뒤 이번 주와 같은 방식으로 비교하기";
+  if (!top) return { title: "다음 7일은 매일 같은 시간에 기록해 보세요", steps: ["수면·감정·운동을 빠뜨리지 않고 기록하기", keepLogging, recompare] };
+  if (top.category === "weather") return { title: "날씨와 피부 점수를 계속 같이 기록해 보세요", steps: ["같은 지역 기준으로 매일 기록하기", keepLogging, recompare] };
+  const better = top.diff < 0; // 있던 날 점수가 낮았다 = 그 요인이 있는 날이 편했다
+  return better
+    ? { title: `${top.label}인 날을 늘려 보세요`, steps: [`7일 중 4일 이상 "${top.label}" 날 만들기`, keepLogging, recompare] }
+    : { title: `${top.label}인 날을 줄여 보세요`, steps: [`7일 중 "${top.label}" 날을 2일 이하로 줄이기`, keepLogging, recompare] };
+}
+
+export interface ChangeHeadline { title: string; detail: string; direction: "better" | "worse" | "same" }
+
+/** 이번 7일에 "무엇이 달라졌나"를 한 줄로. 가장 크게 내려간 고민을 앞세우고, 내려간 게 없으면 있는 그대로 말한다. 효과 판정이 아니라 기록 그대로의 변화다. */
+export function changeHeadline(session: RecoverySession): ChangeHeadline | null {
+  const results = concernResults(session);
+  if (!results.length) return null;
+  const best = results.reduce((a, b) => (b.delta > a.delta ? b : a));
+  if (best.delta > 0) {
+    const others = results.filter(r => r.key !== best.key && r.delta > 0).length;
+    return { direction: "better", title: `${best.label} ${best.start}점 → ${best.end}점`, detail: `기록상 ${best.delta}점 낮아졌어요${others ? `. 다른 ${others}개 고민도 함께 내려갔어요` : ""}.` };
+  }
+  const worst = results.reduce((a, b) => (b.delta < a.delta ? b : a));
+  if (worst.delta < 0) return { direction: "worse", title: `${worst.label} ${worst.start}점 → ${worst.end}점`, detail: `기록상 ${-worst.delta}점 올랐어요. 어떤 날에 올랐는지 아래에서 볼 수 있어요.` };
+  return { direction: "same", title: "점수가 거의 그대로였어요", detail: "시작일과 마지막 날의 기록 점수가 같았어요." };
+}
+
+export interface NotableDay {
+  date: string;
+  score: number;
+  /** 그날 기록한 항목 — 비교가 아니라 "그날 어땠는지"를 그대로 보여주기 위한 짧은 설명 */
+  tags: string[];
+}
+
+/** 리포트 구간에서 불편 점수가 가장 낮았던 날과 가장 높았던 날. 요인 비교와 달리 날짜 2개를 그대로 보여줄 뿐 추정은 하지 않는다. 점수가 모두 같거나 2일 미만이면 null. */
+export function bestAndWorstDays(session: RecoverySession): { best: NotableDay; worst: NotableDay } | null {
+  const scored = reportLogs(session)
+    .map(log => ({ log, score: dailyDiscomfort(log, session.selectedConcerns) }))
+    .filter((x): x is { log: DailyLog; score: number } => x.score !== null);
+  if (scored.length < 2) return null;
+  const best = scored.reduce((a, b) => (b.score < a.score ? b : a));
+  const worst = scored.reduce((a, b) => (b.score > a.score ? b : a));
+  if (best.score === worst.score) return null;
+  const describe = ({ log, score }: { log: DailyLog; score: number }): NotableDay => {
+    const tags: string[] = [`수면 ${Math.floor(log.sleepMinutes / 60)}시간${log.sleepMinutes % 60 ? ` ${log.sleepMinutes % 60}분` : ""}`];
+    if (log.exerciseType !== "none") tags.push(EXERCISE_LABEL[log.exerciseType]);
+    for (const e of log.emotions.slice(0, 2)) tags.push(EMOTION_LABEL[e]);
+    for (const c of log.contextFactors) if (c !== "none") tags.push(CONTEXT_LABEL[c]);
+    return { date: log.date, score: Math.round(score * 10) / 10, tags };
+  };
+  return { best: describe(best), worst: describe(worst) };
 }
 
 export function nextWeekSuggestion(topFactors: LifestyleFactor[]): string {
