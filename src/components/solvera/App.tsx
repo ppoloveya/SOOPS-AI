@@ -7,6 +7,7 @@ import { ForecastCard } from "./ForecastCard";
 import { PeriodCard } from "./PeriodCard";
 import { ReminderCard } from "./ReminderCard";
 import { TodayCard } from "./TodayCard";
+import { CycleCard } from "./CycleCard";
 import { startExperiment } from "@/lib/solvera/experiment";
 import { SkinTipScene } from "./SkinTipScene";
 import { SleepDial } from "./SleepDial";
@@ -844,6 +845,7 @@ function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onRese
         </div>
       )}
       <TodayCard session={session} setSession={setSession} />
+      <CycleCard session={session} />
       <ReminderCard />
       <PeriodCard session={session} setSession={setSession} />
       <ForecastCard session={session} />

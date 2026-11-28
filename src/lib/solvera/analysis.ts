@@ -397,6 +397,39 @@ export function reportEvidence(session: RecoverySession) {
   };
 }
 
+export interface CumulativeSummary {
+  /** 점수가 있는 누적 기록 일수(이전 주기 포함) */
+  days: number;
+  /** 14일 또는 28일 마일스톤을 넘었는가 */
+  milestone: 14 | 28;
+  /** 첫 7일과 가장 최근 7일의 평균 불편 점수 */
+  firstWeekAvg: number;
+  lastWeekAvg: number;
+  type: RecoveryTypeResult;
+  top?: LifestyleFactor;
+}
+
+/**
+ * 한 주기(28일) 누적 리포트. 시뮬레이션에서 7일은 학습에 짧고 기록이 쌓일수록 찾는 비율이 올랐으므로(docs/simulation.md),
+ * 이전 주기를 합친 14일부터 요약을 보여준다. 14일 미만이면 null. 효과 판정이 아니라 내 기록의 누적 요약이다.
+ */
+export function cumulativeSummary(session: RecoverySession, opts: { priors?: Record<string, Prior> } = {}): CumulativeSummary | null {
+  const scored = analysisLogs(session)
+    .map(log => dailyDiscomfort(log, session.selectedConcerns))
+    .filter((v): v is number => v !== null);
+  if (scored.length < 14) return null;
+  const avg = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
+  const factors = lifestyleFactors(session, { priors: opts.priors });
+  return {
+    days: scored.length,
+    milestone: scored.length >= 28 ? 28 : 14,
+    firstWeekAvg: avg(scored.slice(0, 7)),
+    lastWeekAvg: avg(scored.slice(-7)),
+    type: recoveryType(session, factors),
+    top: factors[0],
+  };
+}
+
 /** 오늘 기록 직후 보여줄, "내 기록이 리포트에 어떻게 쌓이고 있는지" 한두 줄. */
 export function dailyInsight(session: RecoverySession): { versusYesterday: string | null; evidence: string } {
   const logs = reportLogs(session);
