@@ -434,6 +434,7 @@ function Consent({ onBack, onNext }: { onBack: () => void; onNext: (cloud: boole
           ["하루 30초", "매일 한 번 누르면 돼요."],
           ["내 기기에만 저장", "아래 선택에 동의하지 않으면 서버로 보내지 않아요."],
           ["진단이 아니에요", "내 기록을 정리해주는 서비스예요."],
+          ["익명 사용 통계", "앱을 연 횟수 같은 사건 이름만 보내요. 피부 기록과 메모는 포함하지 않고, 브라우저의 '추적 안 함'을 켜면 보내지 않아요."],
         ].map(([t, d]) => (
           <Card key={t} className="flex gap-3">
             <div className="mt-1 w-2 h-2 rounded-full bg-rose shrink-0" />
