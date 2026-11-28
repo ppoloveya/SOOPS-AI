@@ -7,7 +7,8 @@ CREATE TABLE public.app_events (
   event TEXT NOT NULL CHECK (event IN (
     'app_open', 'first_log', 'challenge_complete', 'next_cycle_start',
     'share_click', 'share_link_open', 'gift_sent', 'quick_check', 'quick_to_full',
-    'chat_parse_confirmed', 'chat_parse_corrected', 'log_saved', 'reminder_set', 'install_click'
+    'chat_parse_confirmed', 'chat_parse_corrected', 'log_saved', 'reminder_set', 'install_click',
+    'experiment_start', 'experiment_done'
   )),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

@@ -11,6 +11,7 @@
 - 생활 요인은 "그 요인이 있던 날 / 없던 날"의 평균 점수를 비교하고, 비교에 쓰인 날짜를 함께 표시합니다. 같은 방향이 여러 날 반복되면 "여러 날 반복"으로 구분합니다.
 - 자가 기록의 동반 패턴이며 원인이나 제품 효과를 판정하지 않습니다. 근거와 한계는 [docs/product-effect-methodology.md](docs/product-effect-methodology.md)를 보세요.
 - 기준값(2점·30% 변화 폭, 수면·스트레스 요인, 소표본 비교 등)의 논문 근거와 한계는 [docs/evidence-basis.md](docs/evidence-basis.md)에 있습니다.
+- 에이전트 동작: 대시보드의 "오늘의 한 가지"가 1순위 요인으로 일주일짜리 "내 실험"(늘려 보기/줄여 보기)을 제안하고, 끝나면 같은 방식으로 다시 비교합니다. 결과는 내 기록에서 보인 차이일 뿐 원인이나 제품 효과를 판정하지 않습니다(`src/lib/solvera/experiment.ts`).
 - 실제 고객 기록이 없는 동안은 정답을 아는 합성 사용자 30명으로 분석 로직을 점검합니다(`npm run simulate`). 결과는 현실의 정확도가 아니라 분석 로직의 성질입니다. [docs/simulation.md](docs/simulation.md)
 - 선택 동의한 고객의 기록을 서버에 모아 고객 전체 사전 분포를 학습하는 구조는 [docs/data-learning.md](docs/data-learning.md)입니다. **아직 어떤 서버에도 적용하지 않았습니다.**
 - 하루 쉬어가도 식물과 챌린지는 이어집니다. 쉬어가는 날 허용 횟수는 `src/lib/solvera/streak.ts`의 `GRACE_DAYS`(기본 1)로 조절하고, `0`이면 7일 연속 기록만 인정합니다.

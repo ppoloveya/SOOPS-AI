@@ -2,6 +2,7 @@ import { STORAGE_KEY, CURRENT_VERSION, type RecoverySession } from "./types.ts";
 import { hasCompletedChallenge } from "./streak.ts";
 import { normalizePlantName } from "./plantShare.ts";
 import { normalizeStarts } from "./period.ts";
+import { normalizeExperiment } from "./experiment-shape.ts";
 
 export function loadSession(): RecoverySession | null {
   if (typeof window === "undefined") return null;
@@ -49,6 +50,7 @@ function migrate(data: any): RecoverySession | null {
     profileDone: data.profileDone === true || Object.keys(data.baselineScores || {}).length > 0,
     region: typeof data.region === "string" ? data.region : undefined,
     periodStarts: normalizeStarts(Array.isArray(data.periodStarts) ? data.periodStarts.filter((d: unknown): d is string => typeof d === "string") : []),
+    experiment: normalizeExperiment(data.experiment),
     completed: hasCompletedChallenge(Array.isArray(data.dailyLogs) ? data.dailyLogs : []),
   };
   return session;

@@ -7,6 +7,8 @@ export const APP_EVENTS = [
   "quick_check", "quick_to_full", "chat_parse_confirmed", "chat_parse_corrected",
   // 재방문 지표용: 기록을 저장할 때마다(log_saved), 알림을 캘린더에 넣었을 때(reminder_set), 홈 화면 추가를 눌렀을 때(install_click)
   "log_saved", "reminder_set", "install_click",
+  // 에이전트 제안이 행동으로 이어지는지(제안 수행률): 내 실험을 시작했을 때, 오늘 "해봤어요"를 눌렀을 때
+  "experiment_start", "experiment_done",
 ] as const;
 export type AppEvent = typeof APP_EVENTS[number];
 

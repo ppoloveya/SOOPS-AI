@@ -6,6 +6,8 @@ import { PlantIdentity } from "./PlantIdentity";
 import { ForecastCard } from "./ForecastCard";
 import { PeriodCard } from "./PeriodCard";
 import { ReminderCard } from "./ReminderCard";
+import { TodayCard } from "./TodayCard";
+import { startExperiment } from "@/lib/solvera/experiment";
 import { SkinTipScene } from "./SkinTipScene";
 import { SleepDial } from "./SleepDial";
 import { ChatDailyFlow } from "./ChatDailyFlow";
@@ -13,7 +15,7 @@ import {
   CONCERN_KEYS, CONCERN_LABEL, EMOTION_KEYS, EMOTION_LABEL, EMOTION_SCORE,
   EXERCISE_KEYS, EXERCISE_LABEL, EXERCISE_META, CONTEXT_KEYS, CONTEXT_LABEL,
   type ConcernKey, type EmotionKey, type ExerciseKey, type ContextKey,
-  type RecoverySession, type SkinType, type CurrentCondition, type DailyLog,
+  type RecoverySession, type SkinType, type CurrentCondition, type DailyLog, type Experiment,
 } from "@/lib/solvera/types";
 import { loadSession, saveSession, clearSession, todayISO } from "@/lib/solvera/storage";
 import { startNextCycle } from "@/lib/solvera/cycle";
@@ -130,10 +132,12 @@ export function SolveraApp() {
     setSession(buildDemoSession()); setDemoMode(true); setPhase("report");
   };
 
-  const continueNextCycle = () => {
+  const continueNextCycle = (experiment?: Experiment) => {
     if (!session) return;
     trackEvent("next_cycle_start");
-    setSession(startNextCycle(session)); setPhase("dashboard");
+    if (experiment) trackEvent("experiment_start");
+    const next = startNextCycle(session);
+    setSession(experiment ? { ...next, experiment } : next); setPhase("dashboard");
   };
 
   const resetAll = () => {
@@ -839,6 +843,7 @@ function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onRese
           <button type="button" onClick={onProfile} className="mt-3 rounded-full border border-white/80 bg-white/50 px-4 py-2.5 text-[13px] font-semibold text-plum">프로필 채우기</button>
         </div>
       )}
+      <TodayCard session={session} setSession={setSession} />
       <ReminderCard />
       <PeriodCard session={session} setSession={setSession} />
       <ForecastCard session={session} />
@@ -1219,7 +1224,7 @@ function RewardRequest({ session }: { session: RecoverySession }) {
 /* =============================================================================
    REPORT
 ============================================================================= */
-function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw }: { session: RecoverySession; demoMode: boolean; onBack: () => void; onReset: () => void; onNext: () => void; priors: Record<string, Prior>; onWithdraw: () => void }) {
+function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw }: { session: RecoverySession; demoMode: boolean; onBack: () => void; onReset: () => void; onNext: (experiment?: Experiment) => void; priors: Record<string, Prior>; onWithdraw: () => void }) {
   const [shareStatus, setShareStatus] = useState("");
   const results = useMemo(() => concernResults(session), [session]);
   const usage = useMemo(() => ampouleUsageRate(session), [session]);
@@ -1459,7 +1464,10 @@ function Report({ session, demoMode, onBack, onReset, onNext, priors, onWithdraw
           <Card className="print-avoid-break">
             <div className="text-[11px] tracking-brand text-muted-foreground uppercase">기록이 쌓일수록 더 분명해져요</div>
             <p className="mt-2 text-[12px] leading-[1.6] text-charcoal/75">다음 7일을 이어서 기록하면 이번 기록과 합쳐서 비교해요. 같은 요인이 있던 날과 없던 날이 늘어날수록 추정 범위가 좁아지고, 우연일 가능성이 줄어들어요.</p>
-            <div className="mt-3"><PrimaryButton onClick={onNext}>다음 7일 이어서 기록하기</PrimaryButton></div>
+            <div className="mt-3 space-y-2">
+              {top && <PrimaryButton onClick={() => onNext(startExperiment(top, todayISO()))}>{action.title}, 이어서 기록하기</PrimaryButton>}
+              <PrimaryButton onClick={() => onNext()} variant={top ? "outline" : "primary"}>{top ? "실험 없이 이어서 기록하기" : "다음 7일 이어서 기록하기"}</PrimaryButton>
+            </div>
           </Card>
         )}
 

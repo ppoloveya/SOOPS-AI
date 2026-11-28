@@ -131,6 +131,22 @@ export interface RecoverySession {
   periodStarts?: string[];
   /** 선택 프로필(피부 타입·생리 항목·지역)을 마쳤는지. 처음 시작할 때는 묻지 않고 나중에 대시보드에서 묻는다 */
   profileDone?: boolean;
+  /** 지금 하고 있는(또는 방금 끝난) "내 실험". 이 기기에만 저장한다 */
+  experiment?: Experiment;
+}
+
+/** 일주일 동안 요인 하나를 늘리거나 줄여 보고, 끝나면 같은 방식으로 다시 비교하는 실험 */
+export interface Experiment {
+  id: string;
+  /** lifestyleFactors의 key (예: sleep_over7) */
+  factorKey: string;
+  label: string;
+  /** more: 그 요인이 있는 날을 늘려 보기, less: 줄여 보기 */
+  direction: "more" | "less";
+  startDate: string; // YYYY-MM-DD
+  days: number;
+  /** "해봤어요"를 누른 날 */
+  doneDates: string[];
 }
 
 export const STORAGE_KEY = "solvera:session:v1";
