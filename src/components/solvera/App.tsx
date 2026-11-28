@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Copy, Info, Instagram, Share2 } from "lucide-react";
+import { toast } from "sonner";
 import { BloomFlower } from "./BloomFlower";
 import { FlowerGarden } from "./FlowerGarden";
 import { PlantIdentity } from "./PlantIdentity";
@@ -154,6 +155,7 @@ export function SolveraApp() {
       {phase === "consent" && session && <Consent onBack={() => setPhase("landing")} onNext={async (cloud: boolean) => {
         let granted = false;
         if (cloud) { try { await grantConsent(); granted = true; } catch { /* 동의 저장에 실패하면 서버 전송 없이 기기에만 저장 */ } }
+        if (cloud && !granted) toast("지금은 서버 저장을 쓸 수 없어서 이 기기에만 저장해요.");
         setSession({ ...session, cloudConsent: granted }); setPhase("concerns");
       }} />}
       {phase === "profile" && session && <Profile session={session} setSession={setSession} onNext={() => { setSession({ ...session, profileDone: true }); setPhase("dashboard"); }} onBack={() => setPhase("dashboard")} />}
