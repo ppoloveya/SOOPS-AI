@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
@@ -7,6 +8,9 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      { name: "theme-color", content: "#E9E3F7" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-title", content: "SOOPSAI" },
       { title: "SOOPSAI 7-Day Bloom Report — 나만의 리커버리 리포트" },
       { name: "description", content: "SOOPSAI 찔레꽃 리커버리 앰플과 함께하는 7일 셀프 피부 리포트. QR로 접속해 하루 30초씩 기록하고 개인 리포트를 확인하세요." },
       { property: "og:title", content: "SOOPSAI 7-Day Bloom Report — 나만의 리커버리 리포트" },
@@ -19,6 +23,8 @@ export const Route = createRootRoute({
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7554041d-dee6-49e8-9e0a-e917742d7ed5/id-preview-d96f4117--d2f36cce-6bbb-4b27-8039-b12aa545a565.lovable.app-1785367826148.png" },
     ],
     links: [
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
       { rel: "preconnect", href: "https://cdn.jsdelivr.net", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" },
       { rel: "stylesheet", href: "https://cdn.jsdelivr.net/gh/wanteddev/maru-buri@1.2/dist/MaruBuri.css" },
@@ -42,6 +48,10 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  // 설치 가능한 웹앱 조건. 개발 서버에서는 오래된 화면이 남지 않도록 등록하지 않는다.
+  useEffect(() => {
+    if (import.meta.env.PROD && "serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }, []);
   return (
     <>
       <Outlet />

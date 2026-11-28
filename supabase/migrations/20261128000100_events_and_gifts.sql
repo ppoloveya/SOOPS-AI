@@ -7,7 +7,7 @@ CREATE TABLE public.app_events (
   event TEXT NOT NULL CHECK (event IN (
     'app_open', 'first_log', 'challenge_complete', 'next_cycle_start',
     'share_click', 'share_link_open', 'gift_sent', 'quick_check', 'quick_to_full',
-    'chat_parse_confirmed', 'chat_parse_corrected'
+    'chat_parse_confirmed', 'chat_parse_corrected', 'log_saved', 'reminder_set', 'install_click'
   )),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -67,3 +67,32 @@ SELECT event, count(DISTINCT anon_id) AS devices, count(*) AS events, min(create
 FROM public.app_events
 GROUP BY event;
 REVOKE ALL ON public.app_funnel FROM PUBLIC, anon, authenticated;
+
+-- 4) 재방문 지표 — PRD의 핵심 지표(7일차 재방문, 주간 활성 기록률)를 서비스 롤에서 바로 본다. 날짜는 한국 시간 기준.
+-- 7일차 재방문: 처음 본 날부터 7일이 지난 기기 중, 정확히 7일째 날에 다시 열어본 비율의 분자·분모.
+CREATE OR REPLACE VIEW public.app_retention_d7 AS
+WITH first_seen AS (
+  SELECT anon_id, min((created_at AT TIME ZONE 'Asia/Seoul')::date) AS d0
+  FROM public.app_events GROUP BY anon_id
+), eligible AS (
+  SELECT * FROM first_seen WHERE d0 <= (now() AT TIME ZONE 'Asia/Seoul')::date - 7
+)
+SELECT count(*) AS devices,
+       count(*) FILTER (WHERE EXISTS (
+         SELECT 1 FROM public.app_events e
+         WHERE e.anon_id = eligible.anon_id AND (e.created_at AT TIME ZONE 'Asia/Seoul')::date = eligible.d0 + 7
+       )) AS returned_on_day_7
+FROM eligible;
+REVOKE ALL ON public.app_retention_d7 FROM PUBLIC, anon, authenticated;
+
+-- 주간 활성 기록률: 그 주에 기록을 저장한 기기 중, 3일 이상 기록한 기기 수.
+CREATE OR REPLACE VIEW public.app_weekly_recording AS
+WITH per_device AS (
+  SELECT anon_id,
+         date_trunc('week', created_at AT TIME ZONE 'Asia/Seoul')::date AS week,
+         count(DISTINCT (created_at AT TIME ZONE 'Asia/Seoul')::date) AS log_days
+  FROM public.app_events WHERE event = 'log_saved' GROUP BY 1, 2
+)
+SELECT week, count(*) AS devices_recording, count(*) FILTER (WHERE log_days >= 3) AS devices_3plus_days
+FROM per_device GROUP BY week ORDER BY week;
+REVOKE ALL ON public.app_weekly_recording FROM PUBLIC, anon, authenticated;

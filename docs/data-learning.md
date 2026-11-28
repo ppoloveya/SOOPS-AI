@@ -41,7 +41,7 @@
 
 ## 사용 흐름 측정과 친구 응원 (`20261128000100_events_and_gifts.sql`)
 
-- **측정:** `app_open`, `first_log`, `challenge_complete`, `next_cycle_start`, `share_click`, `share_link_open`, `gift_sent` 7가지 사건과 기기별 임의 ID만 저장한다. 피부·건강 기록, 메모, 식물 이름은 보내지 않는다. 브라우저의 "추적 안 함"이 켜져 있으면 보내지 않는다. 퍼널은 서비스 롤로 `select * from app_funnel`을 조회한다.
+- **측정:** `app_open`, `first_log`, `challenge_complete`, `next_cycle_start`, `share_click`, `share_link_open`, `gift_sent`, `quick_check`, `quick_to_full`, `chat_parse_confirmed`, `chat_parse_corrected`, `log_saved`(기록을 저장할 때마다), `reminder_set`(알림 일정을 캘린더에 넣었을 때), `install_click`(홈 화면 추가를 눌렀을 때) 사건과 기기별 임의 ID만 저장한다. 알림 시간은 이 기기에만 저장하고 서버로 보내지 않는다. 피부·건강 기록, 메모, 식물 이름은 보내지 않는다. 브라우저의 "추적 안 함"이 켜져 있으면 보내지 않는다. 퍼널은 서비스 롤로 `select * from app_funnel`을 조회한다. 재방문 지표는 `select * from app_retention_d7`(7일차 재방문)과 `select * from app_weekly_recording`(주간 3일 이상 기록한 기기 수)으로 본다. 날짜는 한국 시간 기준이다.
 - **응원:** 공유 링크의 임의 토큰으로만 식물을 가리키고, 계정·이름·건강 정보와 연결하지 않는다. 한 식물이 하루에 받을 수 있는 응원은 10개까지이고, 보낸 사람은 저장하지 않는다. 응원은 경험치에 더해지지 않는다.
 - **적용 전 확인:** 측정도 개인정보 처리방침에 한 줄 고지가 필요하다. 이 마이그레이션도 아직 어떤 DB에도 적용하지 않았다.
 

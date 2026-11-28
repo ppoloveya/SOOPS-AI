@@ -5,6 +5,8 @@
 export const APP_EVENTS = [
   "app_open", "first_log", "challenge_complete", "next_cycle_start", "share_click", "share_link_open", "gift_sent",
   "quick_check", "quick_to_full", "chat_parse_confirmed", "chat_parse_corrected",
+  // 재방문 지표용: 기록을 저장할 때마다(log_saved), 알림을 캘린더에 넣었을 때(reminder_set), 홈 화면 추가를 눌렀을 때(install_click)
+  "log_saved", "reminder_set", "install_click",
 ] as const;
 export type AppEvent = typeof APP_EVENTS[number];
 

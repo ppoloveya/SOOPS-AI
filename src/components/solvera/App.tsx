@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Copy, Info, Instagram, Share2 } from "lucide-react";
 import { BloomFlower } from "./BloomFlower";
 import { FlowerGarden } from "./FlowerGarden";
 import { PlantIdentity } from "./PlantIdentity";
 import { ForecastCard } from "./ForecastCard";
 import { PeriodCard } from "./PeriodCard";
+import { ReminderCard } from "./ReminderCard";
 import { SkinTipScene } from "./SkinTipScene";
 import { SleepDial } from "./SleepDial";
 import { ChatDailyFlow } from "./ChatDailyFlow";
@@ -79,6 +80,15 @@ export function SolveraApp() {
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logCount, region, demoMode]);
+
+  // 기록을 새로 저장할 때마다 센다(주간 활성 기록률). 처음 불러올 때의 기존 기록 수는 세지 않는다.
+  const hasSession = !!session;
+  const prevLogCount = useRef<number | null>(null);
+  useEffect(() => {
+    if (!hasSession || demoMode) return;
+    if (prevLogCount.current !== null && logCount > prevLogCount.current) trackEvent("log_saved");
+    prevLogCount.current = logCount;
+  }, [logCount, hasSession, demoMode]);
 
   const completed = !!session?.completed;
   useEffect(() => {
@@ -829,6 +839,7 @@ function Dashboard({ session, setSession, onDaily, onChatDaily, onReport, onRese
           <button type="button" onClick={onProfile} className="mt-3 rounded-full border border-white/80 bg-white/50 px-4 py-2.5 text-[13px] font-semibold text-plum">프로필 채우기</button>
         </div>
       )}
+      <ReminderCard />
       <PeriodCard session={session} setSession={setSession} />
       <ForecastCard session={session} />
 
